@@ -1,0 +1,300 @@
+# FootyLevels Skill Definitions
+# Each skill has key joints to track, checkpoints to evaluate, and feedback rules
+
+skills:
+  cruyff_turn:
+    name: "Cruyff Turn"
+    description: "Drag the ball behind your standing leg while turning 180°"
+    difficulty: intermediate
+    dominant_foot: right  # default, can be flipped
+    
+    # Key phases of the move for alignment
+    phases:
+      - name: approach
+        description: "Running towards the ball/defender"
+      - name: fake
+        description: "Body feint suggesting pass/shot"
+      - name: drag
+        description: "Dragging ball behind standing leg"
+      - name: turn
+        description: "Rotating body 180°"
+      - name: exit
+        description: "Accelerating away"
+    
+    # Joints most important for this skill
+    key_joints:
+      - left_hip
+      - right_hip
+      - left_ankle
+      - right_ankle
+      - left_knee
+      - right_knee
+      - left_shoulder
+      - right_shoulder
+    
+    # Specific checkpoints to evaluate
+    checkpoints:
+      - id: plant_foot_position
+        name: "Plant Foot Position"
+        description: "Standing foot should be close to the ball"
+        phase: drag
+        joints: [left_ankle]  # for right-footed player
+        metric_type: distance
+        ideal_value: 0.26  # calibrated from reference video
+        threshold_good: 0.39
+        threshold_acceptable: 0.51
+        weight: 0.2
+        feedback:
+          good: "Great plant foot positioning!"
+          acceptable: "Plant foot is okay, try to get it a bit closer to the ball"
+          poor: "Keep your plant foot closer to the ball for better balance and control"
+
+      - id: hip_rotation
+        name: "Hip Rotation"
+        description: "Hips should rotate fully during the turn"
+        phase: turn
+        joints: [left_hip, right_hip]
+        metric_type: rotation_angle
+        ideal_value: 166  # calibrated from reference video
+        threshold_good: 148
+        threshold_acceptable: 122
+        weight: 0.3
+        feedback:
+          good: "Excellent hip rotation!"
+          acceptable: "Good rotation, but try to turn your hips more completely"
+          poor: "Rotate your hips more fully - aim for a complete 180° turn"
+
+      - id: shoulder_deception
+        name: "Shoulder Fake"
+        description: "Shoulders should fake one direction before turning"
+        phase: fake
+        joints: [left_shoulder, right_shoulder]
+        metric_type: direction_change
+        ideal_value: 177  # calibrated from reference video
+        threshold_good: 141
+        threshold_acceptable: 106
+        weight: 0.2
+        feedback:
+          good: "Great deception with your shoulders!"
+          acceptable: "Nice fake, exaggerate the shoulder drop a bit more"
+          poor: "Sell the move! Drop your shoulder in the fake direction first"
+
+      - id: knee_bend
+        name: "Knee Flexion"
+        description: "Knees should be bent for balance and explosiveness"
+        phase: drag
+        joints: [left_knee, right_knee]
+        metric_type: angle
+        ideal_value: 30  # calibrated from reference video (smaller angle = more bent)
+        threshold_good: 35
+        threshold_acceptable: 39
+        weight: 0.15
+        feedback:
+          good: "Good knee bend for balance!"
+          acceptable: "Bend your knees a bit more for better stability"
+          poor: "Lower your center of gravity - bend your knees more"
+
+      - id: exit_acceleration
+        name: "Exit Speed"
+        description: "Should accelerate quickly after completing the turn"
+        phase: exit
+        joints: [left_hip, right_hip]  # center of mass proxy
+        metric_type: velocity_change
+        ideal_value: 0.78  # calibrated from reference video
+        threshold_good: 0.62
+        threshold_acceptable: 0.50
+        weight: 0.15
+        feedback:
+          good: "Explosive exit - great acceleration!"
+          acceptable: "Good exit, try to accelerate faster out of the turn"
+          poor: "Burst out of the turn! The move is wasted without quick acceleration"
+
+  step_over:
+    name: "Step Over"
+    description: "Circular foot motion over the ball to fake a direction change"
+    difficulty: beginner
+    dominant_foot: right
+    
+    phases:
+      - name: approach
+        description: "Approaching the ball"
+      - name: step_over
+        description: "Circular motion of foot over ball"
+      - name: push
+        description: "Push ball in opposite direction"
+    
+    key_joints:
+      - right_ankle
+      - right_knee
+      - right_hip
+      - left_ankle
+      - left_shoulder
+      - right_shoulder
+    
+    checkpoints:
+      - id: foot_arc
+        name: "Foot Arc"
+        description: "Stepping foot should make clean circular motion"
+        phase: step_over
+        joints: [right_ankle]
+        metric_type: arc_completeness
+        ideal_value: 1.0  # full arc
+        threshold_good: 0.8
+        threshold_acceptable: 0.6
+        weight: 0.35
+        feedback:
+          good: "Clean circular motion!"
+          acceptable: "Good arc, try to make it more circular and complete"
+          poor: "Make a fuller circle with your foot - don't cut the arc short"
+      
+      - id: body_lean
+        name: "Body Lean"
+        description: "Body should lean into the fake direction"
+        phase: step_over
+        joints: [left_shoulder, left_hip]
+        metric_type: angle
+        ideal_value: 15  # degrees of lean
+        threshold_good: 10
+        threshold_acceptable: 5
+        weight: 0.25
+        feedback:
+          good: "Great body lean to sell the fake!"
+          acceptable: "Lean into the fake a bit more"
+          poor: "Use your body! Lean into the fake direction to deceive the defender"
+      
+      - id: speed_of_move
+        name: "Move Speed"
+        description: "Step over should be quick and sharp"
+        phase: step_over
+        joints: [right_ankle]
+        metric_type: angular_velocity
+        ideal_value: 500  # degrees per second
+        threshold_good: 400
+        threshold_acceptable: 300
+        weight: 0.25
+        feedback:
+          good: "Quick and sharp - perfect speed!"
+          acceptable: "Good pace, try to be a bit quicker"
+          poor: "Speed it up! A slow step over won't fool anyone"
+      
+      - id: exit_direction
+        name: "Exit Direction"
+        description: "Push ball in opposite direction of step over"
+        phase: push
+        joints: [left_ankle]  # pushing foot
+        metric_type: direction_angle
+        ideal_value: 90  # perpendicular to step over direction
+        threshold_good: 70
+        threshold_acceptable: 50
+        weight: 0.15
+        feedback:
+          good: "Perfect direction change!"
+          acceptable: "Good push, try to go more opposite to your fake"
+          poor: "Push the ball in the opposite direction of your step over"
+
+  elastico:
+    name: "Elastico (Flip Flap)"
+    description: "Quick inside-outside touch to change direction"
+    difficulty: advanced
+    dominant_foot: right
+    
+    phases:
+      - name: approach
+        description: "Approaching with ball"
+      - name: outside_touch
+        description: "Push ball with outside of foot"
+      - name: inside_snap
+        description: "Snap ball back with inside of foot"
+    
+    key_joints:
+      - right_ankle
+      - right_knee
+      - right_foot_index
+    
+    checkpoints:
+      - id: single_motion
+        name: "Fluid Motion"
+        description: "Both touches should be one continuous motion"
+        phase: [outside_touch, inside_snap]
+        joints: [right_ankle]
+        metric_type: motion_continuity
+        ideal_value: 1.0
+        threshold_good: 0.8
+        threshold_acceptable: 0.6
+        weight: 0.4
+        feedback:
+          good: "Beautifully fluid motion!"
+          acceptable: "Good flow, try to make it more seamless"
+          poor: "Make it one smooth motion - don't pause between touches"
+      
+      - id: ankle_rotation
+        name: "Ankle Flexibility"
+        description: "Quick ankle rotation between outside and inside"
+        phase: inside_snap
+        joints: [right_ankle]
+        metric_type: rotation_speed
+        ideal_value: 800  # degrees per second
+        threshold_good: 600
+        threshold_acceptable: 400
+        weight: 0.35
+        feedback:
+          good: "Incredible ankle speed!"
+          acceptable: "Good rotation, work on snapping it faster"
+          poor: "Snap your ankle quicker - the elastico needs fast rotation"
+      
+      - id: ball_control
+        name: "Ball Proximity"
+        description: "Ball should stay close to foot throughout"
+        phase: [outside_touch, inside_snap]
+        joints: [right_foot_index]
+        metric_type: consistency
+        ideal_value: 0.1  # low variance
+        threshold_good: 0.15
+        threshold_acceptable: 0.25
+        weight: 0.25
+        feedback:
+          good: "Great close control!"
+          acceptable: "Keep the ball a bit closer to your foot"
+          poor: "The ball is getting away from you - keep it tighter"
+
+# MediaPipe landmark indices for reference
+landmarks:
+  nose: 0
+  left_eye_inner: 1
+  left_eye: 2
+  left_eye_outer: 3
+  right_eye_inner: 4
+  right_eye: 5
+  right_eye_outer: 6
+  left_ear: 7
+  right_ear: 8
+  mouth_left: 9
+  mouth_right: 10
+  left_shoulder: 11
+  right_shoulder: 12
+  left_elbow: 13
+  right_elbow: 14
+  left_wrist: 15
+  right_wrist: 16
+  left_pinky: 17
+  right_pinky: 18
+  left_index: 19
+  right_index: 20
+  left_thumb: 21
+  right_thumb: 22
+  left_hip: 23
+  right_hip: 24
+  left_knee: 25
+  right_knee: 26
+  left_ankle: 27
+  right_ankle: 28
+  left_heel: 29
+  right_heel: 30
+  left_foot_index: 31
+  right_foot_index: 32
+
+# Scoring weights
+scoring:
+  checkpoint_weight: 0.7  # How much checkpoints affect overall score
+  smoothness_weight: 0.15  # How smooth/fluid the movement is
+  timing_weight: 0.15  # How well timing matches reference
