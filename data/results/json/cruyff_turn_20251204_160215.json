@@ -1,0 +1,126 @@
+{
+  "id": "cruyff_turn_20251204_160215",
+  "timestamp": "2025-12-04T16:02:15.013752",
+  "skill": "Cruyff Turn",
+  "analysis": {
+    "skill_name": "Cruyff Turn",
+    "overall_score": 72.1,
+    "similarity_score": 94.5,
+    "checkpoints": [
+      {
+        "id": "plant_foot_position",
+        "name": "Plant Foot Position",
+        "score": 70.0,
+        "rating": "acceptable",
+        "feedback": "Plant foot is okay, try to get it a bit closer to the ball",
+        "value": 0.414,
+        "ideal": 0.26
+      },
+      {
+        "id": "hip_rotation",
+        "name": "Hip Rotation",
+        "score": 52.2,
+        "rating": "poor",
+        "feedback": "Rotate your hips more fully - aim for a complete 180\u00b0 turn",
+        "value": 86.703,
+        "ideal": 166
+      },
+      {
+        "id": "shoulder_deception",
+        "name": "Shoulder Fake",
+        "score": 30.0,
+        "rating": "poor",
+        "feedback": "Sell the move! Drop your shoulder in the fake direction first",
+        "value": 172.431,
+        "ideal": 177
+      },
+      {
+        "id": "knee_bend",
+        "name": "Knee Flexion",
+        "score": 60.1,
+        "rating": "poor",
+        "feedback": "Lower your center of gravity - bend your knees more",
+        "value": 41.966,
+        "ideal": 30
+      },
+      {
+        "id": "exit_acceleration",
+        "name": "Exit Speed",
+        "score": 100.0,
+        "rating": "good",
+        "feedback": "Explosive exit - great acceleration!",
+        "value": 0.47,
+        "ideal": 0.78
+      }
+    ],
+    "strengths": [
+      "Explosive exit - great acceleration!"
+    ],
+    "improvements": [
+      "Rotate your hips more fully - aim for a complete 180\u00b0 turn",
+      "Sell the move! Drop your shoulder in the fake direction first",
+      "Lower your center of gravity - bend your knees more"
+    ],
+    "metadata": {
+      "ref_frames": 79,
+      "user_frames": 79,
+      "alignment_distance": 0.0164
+    }
+  },
+  "user_video": "data/reference/cruyff_turn.mp4",
+  "reference_video": "data/reference/cruyff_turn.mp4",
+  "feedback": {
+    "skill_name": "Cruyff Turn",
+    "overall_rating": "good",
+    "overall_score": 72.1,
+    "summary": "Good Cruyff Turn! You've got the basics down with room for refinement.",
+    "strengths": [
+      {
+        "title": "Exit Speed",
+        "detail": "Explosive exit - great acceleration!",
+        "priority": 5
+      }
+    ],
+    "improvements": [
+      {
+        "title": "Hip Rotation",
+        "detail": "Rotate your hips more fully - aim for a complete 180\u00b0 turn",
+        "priority": 1,
+        "current_value": 86.70251028342294,
+        "target_value": 166
+      },
+      {
+        "title": "Shoulder Fake",
+        "detail": "Sell the move! Drop your shoulder in the fake direction first",
+        "priority": 1,
+        "current_value": 172.4306531647654,
+        "target_value": 177
+      },
+      {
+        "title": "Knee Flexion",
+        "detail": "Lower your center of gravity - bend your knees more",
+        "priority": 1,
+        "current_value": 41.96578347974229,
+        "target_value": 30
+      },
+      {
+        "title": "Plant Foot Position",
+        "detail": "Plant foot is okay, try to get it a bit closer to the ball",
+        "priority": 2,
+        "current_value": 0.41400143215690044,
+        "target_value": 0.26
+      }
+    ],
+    "tips": [
+      {
+        "title": "Practice Tip",
+        "detail": "Practice the move slowly first, focusing on the drag behind your standing leg"
+      },
+      {
+        "title": "Pro Tip",
+        "detail": "Use your arms for balance during the turn"
+      }
+    ],
+    "encouragement": "Solid performance! Focus on the areas mentioned and you'll level up fast."
+  }
+}
