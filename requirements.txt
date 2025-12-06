@@ -1,0 +1,37 @@
+# FootyLevels Dependencies
+
+# Core ML/CV
+mediapipe>=0.10.0
+opencv-python>=4.8.0
+numpy>=1.24.0
+
+# Video processing
+ffmpeg-python>=0.2.0
+
+# Time series alignment
+dtaidistance>=2.3.0
+fastdtw>=0.3.4
+
+# API
+fastapi>=0.100.0
+uvicorn>=0.23.0
+python-multipart>=0.0.6  # For file uploads
+
+# Data handling
+pyyaml>=6.0
+pydantic>=2.0.0
+
+# Visualization
+matplotlib>=3.7.0
+plotly>=5.15.0
+
+# Testing
+pytest>=7.4.0
+pytest-asyncio>=0.21.0
+
+# Development
+ipython>=8.14.0
+jupyter>=1.0.0
+
+# Optional: GPU acceleration (uncomment if needed)
+# tensorflow>=2.13.0
