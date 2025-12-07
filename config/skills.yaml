@@ -10,17 +10,17 @@ players:
     nationality: "Netherlands"
     era: "1970s"
     category: legend
-    image_url: "players/cruyff.jpg"
+    image_url: "players/cruyff.jpeg"
     bio: "Revolutionary Dutch player who invented the Cruyff Turn at the 1974 World Cup"
 
   ronaldinho:
     id: ronaldinho
-    name: "Ronaldinho"
+    name: "Ronaldinho"  
     nickname: "The Magician"
     nationality: "Brazil"
     era: "2000s"
     category: legend
-    image_url: "players/ronaldinho.jpg"
+    image_url: "players/ronaldinho.jpeg"
     bio: "Brazilian genius known for his incredible flair and joyful style of play"
 
   maradona:
@@ -30,7 +30,7 @@ players:
     nationality: "Argentina"
     era: "1980s"
     category: legend
-    image_url: "players/maradona.jpg"
+    image_url: "players/maradona.jpeg"
     bio: "Argentine legend, one of the greatest dribblers in football history"
 
   zidane:
@@ -40,7 +40,7 @@ players:
     nationality: "France"
     era: "1990s-2000s"
     category: legend
-    image_url: "players/zidane.jpg"
+    image_url: "players/zidane.jpeg"
     bio: "French maestro famous for his elegance and the Marseille Roulette"
 
   neymar:
@@ -50,7 +50,7 @@ players:
     nationality: "Brazil"
     era: "2010s-present"
     category: current
-    image_url: "players/neymar.jpg"
+    image_url: "players/neymar.jpeg"
     bio: "Brazilian superstar known for his incredible skill moves and creativity"
 
   messi:
@@ -60,7 +60,7 @@ players:
     nationality: "Argentina"
     era: "2000s-present"
     category: current
-    image_url: "players/messi.jpg"
+    image_url: "players/messi.jpeg"
     bio: "The greatest of all time, master of close control and quick direction changes"
 
   ronaldo:
@@ -70,7 +70,7 @@ players:
     nationality: "Portugal"
     era: "2000s-present"
     category: current
-    image_url: "players/ronaldo.jpg"
+    image_url: "players/ronaldo.jpeg"
     bio: "Athletic phenomenon known for his stepovers and powerful style"
 
   mbappe:
@@ -80,7 +80,7 @@ players:
     nationality: "France"
     era: "2010s-present"
     category: current
-    image_url: "players/mbappe.jpg"
+    image_url: "players/mbappe.jpeg"
     bio: "French speedster combining pace with technical brilliance"
 
 skills:
@@ -91,7 +91,7 @@ skills:
     dominant_foot: right
     player_id: cruyff
     video_url: "skills/cruyff_turn_reference.mp4"
-    thumbnail_url: "skills/cruyff_turn_thumb.jpg"
+    thumbnail_url: "skills/cruyff_turn_thumb.jpeg"
     origin_story: "Johan Cruyff first performed this move against Sweden at the 1974 World Cup, changing football forever."
 
     phases:
@@ -199,7 +199,7 @@ skills:
     dominant_foot: right
     player_id: ronaldo
     video_url: "skills/step_over_reference.mp4"
-    thumbnail_url: "skills/step_over_thumb.jpg"
+    thumbnail_url: "skills/step_over_thumb.jpeg"
     origin_story: "While not invented by Ronaldo, CR7 made the step over his signature move, often doing multiple in succession."
 
     phases:
@@ -286,7 +286,7 @@ skills:
     dominant_foot: right
     player_id: ronaldinho
     video_url: "skills/elastico_reference.mp4"
-    thumbnail_url: "skills/elastico_thumb.jpg"
+    thumbnail_url: "skills/elastico_thumb.jpeg"
     origin_story: "Made famous by Ronaldinho, the elastico became his signature move, leaving defenders mesmerized."
 
     phases:
@@ -355,7 +355,7 @@ skills:
     dominant_foot: right
     player_id: zidane
     video_url: "skills/roulette_reference.mp4"
-    thumbnail_url: "skills/roulette_thumb.jpg"
+    thumbnail_url: "skills/roulette_thumb.jpeg"
     origin_story: "Zidane made the roulette his trademark move, executing it with unmatched elegance in tight spaces."
 
     phases:
@@ -446,7 +446,7 @@ skills:
     dominant_foot: right
     player_id: neymar
     video_url: "skills/rainbow_flick_reference.mp4"
-    thumbnail_url: "skills/rainbow_flick_thumb.jpg"
+    thumbnail_url: "skills/rainbow_flick_thumb.jpeg"
     origin_story: "Neymar has made the rainbow flick his party piece, humiliating defenders with this audacious skill."
 
     phases:
@@ -520,7 +520,7 @@ skills:
     dominant_foot: right
     player_id: messi
     video_url: "skills/la_croqueta_reference.mp4"
-    thumbnail_url: "skills/la_croqueta_thumb.jpg"
+    thumbnail_url: "skills/la_croqueta_thumb.jpeg"
     origin_story: "Originally performed by Michael Laudrup, Iniesta and Messi made this simple but effective move famous."
 
     phases:
@@ -590,7 +590,7 @@ skills:
     dominant_foot: right
     player_id: mbappe
     video_url: "skills/chop_reference.mp4"
-    thumbnail_url: "skills/chop_thumb.jpg"
+    thumbnail_url: "skills/chop_thumb.jpeg"
     origin_story: "A fundamental skill, Mbappe uses the chop at high speed to devastating effect."
 
     phases:
@@ -662,7 +662,7 @@ skills:
     dominant_foot: right
     player_id: ronaldinho
     video_url: "skills/sombrero_reference.mp4"
-    thumbnail_url: "skills/sombrero_thumb.jpg"
+    thumbnail_url: "skills/sombrero_thumb.jpeg"
     origin_story: "Ronaldinho perfected the art of chipping the ball over defenders with joy and flair."
 
     phases:
@@ -734,7 +734,7 @@ skills:
     dominant_foot: right
     player_id: maradona
     video_url: "skills/heel_chop_reference.mp4"
-    thumbnail_url: "skills/heel_chop_thumb.jpg"
+    thumbnail_url: "skills/heel_chop_thumb.jpeg"
     origin_story: "Maradona used this deceptive heel touch to wrong-foot defenders in tight spaces."
 
     phases:
