@@ -1,14 +1,99 @@
 # FootyLevels Skill Definitions
 # Each skill has key joints to track, checkpoints to evaluate, and feedback rules
 
+# Player definitions - Icons who made these skills famous
+players:
+  cruyff:
+    id: cruyff
+    name: "Johan Cruyff"
+    nickname: "The Dutch Master"
+    nationality: "Netherlands"
+    era: "1970s"
+    category: legend
+    image_url: "players/cruyff.jpg"
+    bio: "Revolutionary Dutch player who invented the Cruyff Turn at the 1974 World Cup"
+
+  ronaldinho:
+    id: ronaldinho
+    name: "Ronaldinho"
+    nickname: "The Magician"
+    nationality: "Brazil"
+    era: "2000s"
+    category: legend
+    image_url: "players/ronaldinho.jpg"
+    bio: "Brazilian genius known for his incredible flair and joyful style of play"
+
+  maradona:
+    id: maradona
+    name: "Diego Maradona"
+    nickname: "El Pibe de Oro"
+    nationality: "Argentina"
+    era: "1980s"
+    category: legend
+    image_url: "players/maradona.jpg"
+    bio: "Argentine legend, one of the greatest dribblers in football history"
+
+  zidane:
+    id: zidane
+    name: "Zinedine Zidane"
+    nickname: "Zizou"
+    nationality: "France"
+    era: "1990s-2000s"
+    category: legend
+    image_url: "players/zidane.jpg"
+    bio: "French maestro famous for his elegance and the Marseille Roulette"
+
+  neymar:
+    id: neymar
+    name: "Neymar Jr"
+    nickname: "Ney"
+    nationality: "Brazil"
+    era: "2010s-present"
+    category: current
+    image_url: "players/neymar.jpg"
+    bio: "Brazilian superstar known for his incredible skill moves and creativity"
+
+  messi:
+    id: messi
+    name: "Lionel Messi"
+    nickname: "La Pulga"
+    nationality: "Argentina"
+    era: "2000s-present"
+    category: current
+    image_url: "players/messi.jpg"
+    bio: "The greatest of all time, master of close control and quick direction changes"
+
+  ronaldo:
+    id: ronaldo
+    name: "Cristiano Ronaldo"
+    nickname: "CR7"
+    nationality: "Portugal"
+    era: "2000s-present"
+    category: current
+    image_url: "players/ronaldo.jpg"
+    bio: "Athletic phenomenon known for his stepovers and powerful style"
+
+  mbappe:
+    id: mbappe
+    name: "Kylian Mbappe"
+    nickname: "Donatello"
+    nationality: "France"
+    era: "2010s-present"
+    category: current
+    image_url: "players/mbappe.jpg"
+    bio: "French speedster combining pace with technical brilliance"
+
 skills:
   cruyff_turn:
     name: "Cruyff Turn"
     description: "Drag the ball behind your standing leg while turning 180°"
     difficulty: intermediate
-    dominant_foot: right  # default, can be flipped
-    
-    # Key phases of the move for alignment
+    dominant_foot: right
+    player_id: cruyff
+    video_url: "skills/cruyff_turn_reference.mp4"
+    thumbnail_url: "skills/cruyff_turn_thumb.jpg"
+    origin_story: "Johan Cruyff first performed this move against Sweden at the 1974 World Cup, changing football forever."
+
     phases:
       - name: approach
         description: "Running towards the ball/defender"
@@ -20,8 +105,7 @@ skills:
         description: "Rotating body 180°"
       - name: exit
         description: "Accelerating away"
-    
-    # Joints most important for this skill
+
     key_joints:
       - left_hip
       - right_hip
@@ -31,16 +115,15 @@ skills:
       - right_knee
       - left_shoulder
       - right_shoulder
-    
-    # Specific checkpoints to evaluate
+
     checkpoints:
       - id: plant_foot_position
         name: "Plant Foot Position"
         description: "Standing foot should be close to the ball"
         phase: drag
-        joints: [left_ankle]  # for right-footed player
+        joints: [left_ankle]
         metric_type: distance
-        ideal_value: 0.26  # calibrated from reference video
+        ideal_value: 0.26
         threshold_good: 0.39
         threshold_acceptable: 0.51
         weight: 0.2
@@ -55,7 +138,7 @@ skills:
         phase: turn
         joints: [left_hip, right_hip]
         metric_type: rotation_angle
-        ideal_value: 166  # calibrated from reference video
+        ideal_value: 166
         threshold_good: 148
         threshold_acceptable: 122
         weight: 0.3
@@ -70,7 +153,7 @@ skills:
         phase: fake
         joints: [left_shoulder, right_shoulder]
         metric_type: direction_change
-        ideal_value: 177  # calibrated from reference video
+        ideal_value: 177
         threshold_good: 141
         threshold_acceptable: 106
         weight: 0.2
@@ -85,7 +168,7 @@ skills:
         phase: drag
         joints: [left_knee, right_knee]
         metric_type: angle
-        ideal_value: 30  # calibrated from reference video (smaller angle = more bent)
+        ideal_value: 30
         threshold_good: 35
         threshold_acceptable: 39
         weight: 0.15
@@ -98,9 +181,9 @@ skills:
         name: "Exit Speed"
         description: "Should accelerate quickly after completing the turn"
         phase: exit
-        joints: [left_hip, right_hip]  # center of mass proxy
+        joints: [left_hip, right_hip]
         metric_type: velocity_change
-        ideal_value: 0.78  # calibrated from reference video
+        ideal_value: 0.78
         threshold_good: 0.62
         threshold_acceptable: 0.50
         weight: 0.15
@@ -114,7 +197,11 @@ skills:
     description: "Circular foot motion over the ball to fake a direction change"
     difficulty: beginner
     dominant_foot: right
-    
+    player_id: ronaldo
+    video_url: "skills/step_over_reference.mp4"
+    thumbnail_url: "skills/step_over_thumb.jpg"
+    origin_story: "While not invented by Ronaldo, CR7 made the step over his signature move, often doing multiple in succession."
+
     phases:
       - name: approach
         description: "Approaching the ball"
@@ -122,7 +209,7 @@ skills:
         description: "Circular motion of foot over ball"
       - name: push
         description: "Push ball in opposite direction"
-    
+
     key_joints:
       - right_ankle
       - right_knee
@@ -130,7 +217,7 @@ skills:
       - left_ankle
       - left_shoulder
       - right_shoulder
-    
+
     checkpoints:
       - id: foot_arc
         name: "Foot Arc"
@@ -138,7 +225,7 @@ skills:
         phase: step_over
         joints: [right_ankle]
         metric_type: arc_completeness
-        ideal_value: 1.0  # full arc
+        ideal_value: 1.0
         threshold_good: 0.8
         threshold_acceptable: 0.6
         weight: 0.35
@@ -146,14 +233,14 @@ skills:
           good: "Clean circular motion!"
           acceptable: "Good arc, try to make it more circular and complete"
           poor: "Make a fuller circle with your foot - don't cut the arc short"
-      
+
       - id: body_lean
         name: "Body Lean"
         description: "Body should lean into the fake direction"
         phase: step_over
         joints: [left_shoulder, left_hip]
         metric_type: angle
-        ideal_value: 15  # degrees of lean
+        ideal_value: 15
         threshold_good: 10
         threshold_acceptable: 5
         weight: 0.25
@@ -161,14 +248,14 @@ skills:
           good: "Great body lean to sell the fake!"
           acceptable: "Lean into the fake a bit more"
           poor: "Use your body! Lean into the fake direction to deceive the defender"
-      
+
       - id: speed_of_move
         name: "Move Speed"
         description: "Step over should be quick and sharp"
         phase: step_over
         joints: [right_ankle]
         metric_type: angular_velocity
-        ideal_value: 500  # degrees per second
+        ideal_value: 500
         threshold_good: 400
         threshold_acceptable: 300
         weight: 0.25
@@ -176,14 +263,14 @@ skills:
           good: "Quick and sharp - perfect speed!"
           acceptable: "Good pace, try to be a bit quicker"
           poor: "Speed it up! A slow step over won't fool anyone"
-      
+
       - id: exit_direction
         name: "Exit Direction"
         description: "Push ball in opposite direction of step over"
         phase: push
-        joints: [left_ankle]  # pushing foot
+        joints: [left_ankle]
         metric_type: direction_angle
-        ideal_value: 90  # perpendicular to step over direction
+        ideal_value: 90
         threshold_good: 70
         threshold_acceptable: 50
         weight: 0.15
@@ -197,7 +284,11 @@ skills:
     description: "Quick inside-outside touch to change direction"
     difficulty: advanced
     dominant_foot: right
-    
+    player_id: ronaldinho
+    video_url: "skills/elastico_reference.mp4"
+    thumbnail_url: "skills/elastico_thumb.jpg"
+    origin_story: "Made famous by Ronaldinho, the elastico became his signature move, leaving defenders mesmerized."
+
     phases:
       - name: approach
         description: "Approaching with ball"
@@ -205,12 +296,12 @@ skills:
         description: "Push ball with outside of foot"
       - name: inside_snap
         description: "Snap ball back with inside of foot"
-    
+
     key_joints:
       - right_ankle
       - right_knee
       - right_foot_index
-    
+
     checkpoints:
       - id: single_motion
         name: "Fluid Motion"
@@ -226,14 +317,14 @@ skills:
           good: "Beautifully fluid motion!"
           acceptable: "Good flow, try to make it more seamless"
           poor: "Make it one smooth motion - don't pause between touches"
-      
+
       - id: ankle_rotation
         name: "Ankle Flexibility"
         description: "Quick ankle rotation between outside and inside"
         phase: inside_snap
         joints: [right_ankle]
         metric_type: rotation_speed
-        ideal_value: 800  # degrees per second
+        ideal_value: 800
         threshold_good: 600
         threshold_acceptable: 400
         weight: 0.35
@@ -241,14 +332,14 @@ skills:
           good: "Incredible ankle speed!"
           acceptable: "Good rotation, work on snapping it faster"
           poor: "Snap your ankle quicker - the elastico needs fast rotation"
-      
+
       - id: ball_control
         name: "Ball Proximity"
         description: "Ball should stay close to foot throughout"
         phase: [outside_touch, inside_snap]
         joints: [right_foot_index]
         metric_type: consistency
-        ideal_value: 0.1  # low variance
+        ideal_value: 0.1
         threshold_good: 0.15
         threshold_acceptable: 0.25
         weight: 0.25
@@ -256,6 +347,458 @@ skills:
           good: "Great close control!"
           acceptable: "Keep the ball a bit closer to your foot"
           poor: "The ball is getting away from you - keep it tighter"
+
+  roulette:
+    name: "Marseille Roulette"
+    description: "360° spin while dragging the ball with both feet"
+    difficulty: intermediate
+    dominant_foot: right
+    player_id: zidane
+    video_url: "skills/roulette_reference.mp4"
+    thumbnail_url: "skills/roulette_thumb.jpg"
+    origin_story: "Zidane made the roulette his trademark move, executing it with unmatched elegance in tight spaces."
+
+    phases:
+      - name: approach
+        description: "Approaching the defender"
+      - name: first_touch
+        description: "Initial drag with strong foot"
+      - name: spin
+        description: "360° rotation"
+      - name: second_touch
+        description: "Complete with weak foot"
+      - name: exit
+        description: "Accelerate away"
+
+    key_joints:
+      - left_hip
+      - right_hip
+      - left_ankle
+      - right_ankle
+      - left_shoulder
+      - right_shoulder
+
+    checkpoints:
+      - id: spin_completeness
+        name: "Full Rotation"
+        description: "Complete 360° spin without losing balance"
+        phase: spin
+        joints: [left_hip, right_hip]
+        metric_type: rotation_angle
+        ideal_value: 360
+        threshold_good: 330
+        threshold_acceptable: 300
+        weight: 0.35
+        feedback:
+          good: "Perfect full rotation!"
+          acceptable: "Good spin, try to complete the full 360°"
+          poor: "Commit to the full turn - don't cut it short"
+
+      - id: ball_shielding
+        name: "Ball Protection"
+        description: "Keep body between ball and defender"
+        phase: spin
+        joints: [left_hip, right_hip, left_shoulder, right_shoulder]
+        metric_type: body_angle
+        ideal_value: 90
+        threshold_good: 70
+        threshold_acceptable: 50
+        weight: 0.25
+        feedback:
+          good: "Excellent ball shielding!"
+          acceptable: "Good protection, keep your body more between ball and defender"
+          poor: "Shield the ball better - use your body as a barrier"
+
+      - id: balance
+        name: "Core Stability"
+        description: "Maintain low center of gravity throughout"
+        phase: spin
+        joints: [left_knee, right_knee]
+        metric_type: angle
+        ideal_value: 35
+        threshold_good: 40
+        threshold_acceptable: 50
+        weight: 0.25
+        feedback:
+          good: "Great balance and stability!"
+          acceptable: "Stay lower during the spin"
+          poor: "Bend your knees more - stay compact"
+
+      - id: fluidity
+        name: "Smooth Transition"
+        description: "Both feet work together seamlessly"
+        phase: [first_touch, second_touch]
+        joints: [left_ankle, right_ankle]
+        metric_type: motion_continuity
+        ideal_value: 1.0
+        threshold_good: 0.8
+        threshold_acceptable: 0.6
+        weight: 0.15
+        feedback:
+          good: "Silky smooth execution!"
+          acceptable: "Good flow, work on the transition between feet"
+          poor: "Make it one fluid motion - both feet should work together"
+
+  rainbow_flick:
+    name: "Rainbow Flick"
+    description: "Flick the ball over your head and the defender"
+    difficulty: advanced
+    dominant_foot: right
+    player_id: neymar
+    video_url: "skills/rainbow_flick_reference.mp4"
+    thumbnail_url: "skills/rainbow_flick_thumb.jpg"
+    origin_story: "Neymar has made the rainbow flick his party piece, humiliating defenders with this audacious skill."
+
+    phases:
+      - name: setup
+        description: "Position ball between feet"
+      - name: roll_up
+        description: "Roll ball up back of standing leg"
+      - name: flick
+        description: "Flick ball over head with heel"
+      - name: collection
+        description: "Collect ball on other side"
+
+    key_joints:
+      - left_ankle
+      - right_ankle
+      - left_heel
+      - right_heel
+      - left_hip
+      - right_hip
+
+    checkpoints:
+      - id: ball_roll
+        name: "Ball Roll Control"
+        description: "Smooth roll up the back of the leg"
+        phase: roll_up
+        joints: [left_ankle, left_heel]
+        metric_type: trajectory_smoothness
+        ideal_value: 1.0
+        threshold_good: 0.8
+        threshold_acceptable: 0.6
+        weight: 0.3
+        feedback:
+          good: "Perfect ball roll!"
+          acceptable: "Good roll, work on making it smoother"
+          poor: "Control the roll - don't let the ball bounce"
+
+      - id: flick_height
+        name: "Flick Arc"
+        description: "Ball should arc over head at good height"
+        phase: flick
+        joints: [right_heel]
+        metric_type: velocity_magnitude
+        ideal_value: 5.0
+        threshold_good: 4.0
+        threshold_acceptable: 3.0
+        weight: 0.35
+        feedback:
+          good: "Beautiful arc over the head!"
+          acceptable: "Good height, try to get more lift"
+          poor: "Flick harder - the ball needs to clear your head"
+
+      - id: timing
+        name: "Movement Timing"
+        description: "All phases flow together seamlessly"
+        phase: [setup, roll_up, flick]
+        joints: [left_ankle, right_ankle]
+        metric_type: motion_continuity
+        ideal_value: 1.0
+        threshold_good: 0.8
+        threshold_acceptable: 0.6
+        weight: 0.35
+        feedback:
+          good: "Perfect timing!"
+          acceptable: "Good flow, work on the rhythm"
+          poor: "Practice the timing - it should be one fluid motion"
+
+  la_croqueta:
+    name: "La Croqueta"
+    description: "Quick lateral ball shift from one foot to the other"
+    difficulty: beginner
+    dominant_foot: right
+    player_id: messi
+    video_url: "skills/la_croqueta_reference.mp4"
+    thumbnail_url: "skills/la_croqueta_thumb.jpg"
+    origin_story: "Originally performed by Michael Laudrup, Iniesta and Messi made this simple but effective move famous."
+
+    phases:
+      - name: approach
+        description: "Running with ball"
+      - name: shift
+        description: "Quick lateral pass to other foot"
+      - name: acceleration
+        description: "Burst past defender"
+
+    key_joints:
+      - left_ankle
+      - right_ankle
+      - left_hip
+      - right_hip
+
+    checkpoints:
+      - id: shift_speed
+        name: "Shift Speed"
+        description: "Quick lateral movement of the ball"
+        phase: shift
+        joints: [left_ankle, right_ankle]
+        metric_type: velocity_change
+        ideal_value: 3.0
+        threshold_good: 2.5
+        threshold_acceptable: 2.0
+        weight: 0.4
+        feedback:
+          good: "Lightning quick shift!"
+          acceptable: "Good speed, try to be even quicker"
+          poor: "Shift the ball faster - catch the defender off guard"
+
+      - id: body_position
+        name: "Body Angle"
+        description: "Body should move with the ball"
+        phase: shift
+        joints: [left_hip, right_hip]
+        metric_type: direction_change
+        ideal_value: 45
+        threshold_good: 35
+        threshold_acceptable: 25
+        weight: 0.3
+        feedback:
+          good: "Great body coordination!"
+          acceptable: "Move your body more with the ball"
+          poor: "Your whole body needs to shift - not just the ball"
+
+      - id: close_control
+        name: "Ball Proximity"
+        description: "Keep ball close during the shift"
+        phase: shift
+        joints: [left_ankle, right_ankle]
+        metric_type: distance
+        ideal_value: 0.2
+        threshold_good: 0.3
+        threshold_acceptable: 0.4
+        weight: 0.3
+        feedback:
+          good: "Excellent close control!"
+          acceptable: "Keep the ball closer to your feet"
+          poor: "The ball is too far - keep it tight"
+
+  chop:
+    name: "The Chop"
+    description: "Sharp cut behind standing leg to change direction"
+    difficulty: beginner
+    dominant_foot: right
+    player_id: mbappe
+    video_url: "skills/chop_reference.mp4"
+    thumbnail_url: "skills/chop_thumb.jpg"
+    origin_story: "A fundamental skill, Mbappe uses the chop at high speed to devastating effect."
+
+    phases:
+      - name: approach
+        description: "Running at pace"
+      - name: plant
+        description: "Plant standing foot"
+      - name: cut
+        description: "Chop ball behind standing leg"
+      - name: exit
+        description: "Accelerate in new direction"
+
+    key_joints:
+      - left_ankle
+      - right_ankle
+      - left_knee
+      - right_knee
+
+    checkpoints:
+      - id: cut_angle
+        name: "Cut Sharpness"
+        description: "Ball should change direction sharply"
+        phase: cut
+        joints: [right_ankle]
+        metric_type: direction_angle
+        ideal_value: 90
+        threshold_good: 75
+        threshold_acceptable: 60
+        weight: 0.35
+        feedback:
+          good: "Sharp cut!"
+          acceptable: "Good angle, try to make it sharper"
+          poor: "Cut more sharply - change direction completely"
+
+      - id: plant_stability
+        name: "Plant Foot Stability"
+        description: "Standing foot should be firm and balanced"
+        phase: plant
+        joints: [left_ankle, left_knee]
+        metric_type: stability
+        ideal_value: 1.0
+        threshold_good: 0.8
+        threshold_acceptable: 0.6
+        weight: 0.3
+        feedback:
+          good: "Rock solid plant foot!"
+          acceptable: "Good base, work on stability"
+          poor: "Plant your foot more firmly before cutting"
+
+      - id: exit_speed
+        name: "Acceleration"
+        description: "Quick burst after the cut"
+        phase: exit
+        joints: [left_hip, right_hip]
+        metric_type: velocity_change
+        ideal_value: 2.5
+        threshold_good: 2.0
+        threshold_acceptable: 1.5
+        weight: 0.35
+        feedback:
+          good: "Explosive acceleration!"
+          acceptable: "Good exit, accelerate faster"
+          poor: "Burst away after the cut - don't slow down"
+
+  sombrero:
+    name: "Sombrero Flick"
+    description: "Chip the ball over an incoming opponent"
+    difficulty: advanced
+    dominant_foot: right
+    player_id: ronaldinho
+    video_url: "skills/sombrero_reference.mp4"
+    thumbnail_url: "skills/sombrero_thumb.jpg"
+    origin_story: "Ronaldinho perfected the art of chipping the ball over defenders with joy and flair."
+
+    phases:
+      - name: approach
+        description: "Defender approaching"
+      - name: scoop
+        description: "Scoop ball upward"
+      - name: dodge
+        description: "Move around defender"
+      - name: collection
+        description: "Collect ball on other side"
+
+    key_joints:
+      - right_ankle
+      - right_foot_index
+      - left_hip
+      - right_hip
+
+    checkpoints:
+      - id: scoop_technique
+        name: "Scoop Contact"
+        description: "Get under the ball properly"
+        phase: scoop
+        joints: [right_ankle, right_foot_index]
+        metric_type: angle
+        ideal_value: 45
+        threshold_good: 40
+        threshold_acceptable: 30
+        weight: 0.35
+        feedback:
+          good: "Perfect scoop technique!"
+          acceptable: "Good contact, get more under the ball"
+          poor: "Get your foot under the ball to lift it properly"
+
+      - id: ball_height
+        name: "Lift Height"
+        description: "Ball should clear the opponent"
+        phase: scoop
+        joints: [right_foot_index]
+        metric_type: velocity_magnitude
+        ideal_value: 4.0
+        threshold_good: 3.5
+        threshold_acceptable: 3.0
+        weight: 0.35
+        feedback:
+          good: "Great height on the chip!"
+          acceptable: "Good lift, try to get more height"
+          poor: "Lift the ball higher - it needs to clear the defender"
+
+      - id: movement
+        name: "Body Movement"
+        description: "Quick movement around the defender"
+        phase: dodge
+        joints: [left_hip, right_hip]
+        metric_type: velocity_change
+        ideal_value: 2.0
+        threshold_good: 1.5
+        threshold_acceptable: 1.0
+        weight: 0.3
+        feedback:
+          good: "Quick movement around!"
+          acceptable: "Good movement, be quicker"
+          poor: "Move faster around the defender"
+
+  heel_chop:
+    name: "Heel Chop"
+    description: "Use heel to knock ball behind standing leg"
+    difficulty: intermediate
+    dominant_foot: right
+    player_id: maradona
+    video_url: "skills/heel_chop_reference.mp4"
+    thumbnail_url: "skills/heel_chop_thumb.jpg"
+    origin_story: "Maradona used this deceptive heel touch to wrong-foot defenders in tight spaces."
+
+    phases:
+      - name: approach
+        description: "Running with ball"
+      - name: plant
+        description: "Plant standing foot"
+      - name: heel_touch
+        description: "Heel chop behind standing leg"
+      - name: turn
+        description: "Turn and accelerate"
+
+    key_joints:
+      - right_heel
+      - right_ankle
+      - left_ankle
+      - left_hip
+      - right_hip
+
+    checkpoints:
+      - id: heel_contact
+        name: "Heel Touch"
+        description: "Clean contact with heel"
+        phase: heel_touch
+        joints: [right_heel]
+        metric_type: contact_quality
+        ideal_value: 1.0
+        threshold_good: 0.8
+        threshold_acceptable: 0.6
+        weight: 0.35
+        feedback:
+          good: "Clean heel contact!"
+          acceptable: "Good touch, make it cleaner"
+          poor: "Use your heel more precisely"
+
+      - id: direction_change
+        name: "Direction Change"
+        description: "Ball changes direction sharply"
+        phase: heel_touch
+        joints: [right_heel, right_ankle]
+        metric_type: direction_angle
+        ideal_value: 120
+        threshold_good: 100
+        threshold_acceptable: 80
+        weight: 0.35
+        feedback:
+          good: "Sharp direction change!"
+          acceptable: "Good angle, make it sharper"
+          poor: "Change direction more dramatically"
+
+      - id: body_turn
+        name: "Body Rotation"
+        description: "Turn body to follow the ball"
+        phase: turn
+        joints: [left_hip, right_hip]
+        metric_type: rotation_angle
+        ideal_value: 180
+        threshold_good: 150
+        threshold_acceptable: 120
+        weight: 0.3
+        feedback:
+          good: "Smooth body turn!"
+          acceptable: "Good turn, rotate more fully"
+          poor: "Turn your body completely to follow the ball"
 
 # MediaPipe landmark indices for reference
 landmarks:
@@ -295,6 +838,36 @@ landmarks:
 
 # Scoring weights
 scoring:
-  checkpoint_weight: 0.7  # How much checkpoints affect overall score
-  smoothness_weight: 0.15  # How smooth/fluid the movement is
-  timing_weight: 0.15  # How well timing matches reference
+  checkpoint_weight: 0.7
+  smoothness_weight: 0.15
+  timing_weight: 0.15
+
+# Skill categories for browsing
+categories:
+  - id: turns
+    name: "Turns & Spins"
+    skills: [cruyff_turn, roulette]
+  - id: feints
+    name: "Feints & Fakes"
+    skills: [step_over, elastico, la_croqueta]
+  - id: flicks
+    name: "Flicks & Chips"
+    skills: [rainbow_flick, sombrero, heel_chop]
+  - id: cuts
+    name: "Cuts & Chops"
+    skills: [chop]
+
+# Difficulty progression
+progression:
+  beginner:
+    - step_over
+    - la_croqueta
+    - chop
+  intermediate:
+    - cruyff_turn
+    - roulette
+    - heel_chop
+  advanced:
+    - elastico
+    - rainbow_flick
+    - sombrero
