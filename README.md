@@ -19,7 +19,9 @@ python scripts/demo.py --webcam
 python scripts/demo.py --reference ref.mp4 --user my_attempt.mp4 --skill cruyff_turn
 
 # Start API server
-uvicorn api.main:app --reload
+source .venv/bin/activate  # Activate venv if not already active
+cd api
+python -m uvicorn main:app --reload
 ```
 
 ## Features
@@ -51,10 +53,20 @@ User Video → Pose Extraction → Alignment → Metrics → Feedback
 ## API Usage
 
 ```bash
+# Start the API server (with venv activated)
+cd api
+python -m uvicorn main:app --reload
+
+# In another terminal, test the API
 # List available skills
 curl http://localhost:8000/api/skills
 
-# Analyze a skill
+# Quick analyze (uses pre-stored reference video)
+curl -X POST http://localhost:8000/api/analyze/quick \
+  -F "skill=cruyff_turn" \
+  -F "user_video=@my_attempt.mp4"
+
+# Full analyze (with custom reference video)
 curl -X POST http://localhost:8000/api/analyze \
   -F "skill=cruyff_turn" \
   -F "reference_video=@reference.mp4" \
@@ -135,6 +147,10 @@ skills:
 git clone https://github.com/yourusername/footylevels.git
 cd footylevels
 
+# Create virtual environment (Python 3.11 recommended for MediaPipe compatibility)
+python3.11 -m venv .venv
+source .venv/bin/activate  # On Windows: .venv\Scripts\activate
+
 # Install dependencies
 pip install -r requirements.txt
 
@@ -153,6 +169,9 @@ pip install -e .
 ## Development
 
 ```bash
+# Activate virtual environment
+source .venv/bin/activate  # On Windows: .venv\Scripts\activate
+
 # Install dev dependencies
 pip install -e ".[dev]"
 
