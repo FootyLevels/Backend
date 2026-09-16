@@ -1,313 +1,200 @@
 #!/usr/bin/env python3
 """
 FootyLevels Demo Script
-Quick way to test the skill analysis pipeline.
+Run SAM 3D Body over a video and inspect the extracted 3D body sequence.
 
 Usage:
-    # Test with webcam (records you performing the skill)
-    python scripts/demo.py --webcam --skill cruyff_turn
-    
-    # Test with video files
-    python scripts/demo.py --reference data/reference/cruyff.mp4 --user data/samples/my_attempt.mp4
-    
-    # Quick test with synthetic data
-    python scripts/demo.py --test
+    # Check the model is downloaded and see which device will be used
+    python scripts/demo.py --check
+
+    # Extract from a video file
+    python scripts/demo.py --video data/reference/cruyff_turn.mp4
+
+    # Extract from a skill's stored reference video, every 3rd frame
+    python scripts/demo.py --skill cruyff_turn --stride 3
+
+    # Extract and write an annotated overlay video
+    python scripts/demo.py --video my_clip.mp4 --render out/annotated.mp4
+
+    # List everything extracted so far
+    python scripts/demo.py --list
 """
 
 import argparse
 import sys
-import json
 from pathlib import Path
 
 # Add src to path
-sys.path.insert(0, str(Path(__file__).parent.parent / 'src'))
+sys.path.insert(0, str(Path(__file__).parent.parent / "src"))
 
 from footylevels import (
-    PoseExtractor,
-    PoseSequence,
-    normalize_poses,
-    SequenceAligner,
-    PoseMetricsCalculator,
-    SkillAnalyzer,
-    generate_feedback
+    BodyVisualizer,
+    SAM3DBodyExtractor,
+    SequenceStorage,
+    SkillCatalog,
+    resolve_device,
 )
-from footylevels.storage import AnalysisStorage
-import numpy as np
+
+PROJECT_ROOT = Path(__file__).parent.parent
+REFERENCE_DIR = PROJECT_ROOT / "data" / "reference"
+SEQUENCE_DIR = PROJECT_ROOT / "data" / "sequences"
 
 
-def test_pose_extraction_webcam(duration: float = 5.0):
-    """Test pose extraction using webcam."""
-    print("=" * 50)
-    print("Testing Pose Extraction with Webcam")
-    print("=" * 50)
-    
-    extractor = PoseExtractor(model_complexity=1)
-    
-    try:
-        print(f"\nRecording for {duration} seconds...")
-        print("Stand in frame and perform some movements.")
-        print("Press 'q' to stop early.\n")
-        
-        poses = extractor.extract_from_webcam(duration_seconds=duration)
-        
-        print(f"\n✅ Successfully extracted {len(poses)} frames")
-        print(f"   FPS: {poses.fps:.1f}")
-        print(f"   Resolution: {poses.width}x{poses.height}")
-        print(f"   Duration: {poses.duration_ms/1000:.2f}s")
-        
-        if poses.frames:
-            # Show some metrics
-            metrics = PoseMetricsCalculator(poses)
-            
-            # Get knee angle at middle frame
-            mid_frame = len(poses) // 2
-            left_knee = metrics.get_knee_angle(mid_frame, 'left')
-            right_knee = metrics.get_knee_angle(mid_frame, 'right')
-            
-            print(f"\n   Sample metrics at frame {mid_frame}:")
-            print(f"   - Left knee angle: {left_knee:.1f}°")
-            print(f"   - Right knee angle: {right_knee:.1f}°")
-            
-            # Hip rotation over time
-            rotations = metrics.get_hip_rotation_over_time()
-            print(f"   - Hip rotation range: {rotations.min():.1f}° to {rotations.max():.1f}°")
-        
-        return poses
-        
-    finally:
-        extractor.close()
+def check_model(extractor: SAM3DBodyExtractor) -> bool:
+    """Report checkpoint status and the selected device."""
+    print("=" * 60)
+    print("SAM 3D Body status")
+    print("=" * 60)
+    print(f"  Checkpoint dir: {extractor.checkpoint_dir}")
+    print(f"  Device:         {resolve_device()}")
 
-
-def test_pose_extraction_video(video_path: str):
-    """Test pose extraction from video file."""
-    print("=" * 50)
-    print(f"Testing Pose Extraction from Video")
-    print("=" * 50)
-    
-    video_path = Path(video_path)
-    if not video_path.exists():
-        print(f"❌ Video not found: {video_path}")
-        return None
-    
-    extractor = PoseExtractor(model_complexity=2)
-    
-    try:
-        print(f"\nProcessing: {video_path.name}")
-        poses = extractor.extract_from_video(str(video_path))
-        
-        print(f"\n✅ Successfully extracted {len(poses)} frames")
-        print(f"   FPS: {poses.fps:.1f}")
-        print(f"   Duration: {poses.duration_ms/1000:.2f}s")
-        
-        return poses
-        
-    finally:
-        extractor.close()
-
-
-def test_alignment():
-    """Test sequence alignment with synthetic data."""
-    print("=" * 50)
-    print("Testing Sequence Alignment")
-    print("=" * 50)
-    
-    # Create synthetic pose sequences
-    num_frames_ref = 60
-    num_frames_user = 50
-    
-    print(f"\nCreating synthetic data...")
-    print(f"  Reference: {num_frames_ref} frames")
-    print(f"  User: {num_frames_user} frames")
-    
-    # Reference: smooth motion
-    t_ref = np.linspace(0, 2*np.pi, num_frames_ref)
-    ref_poses = np.zeros((num_frames_ref, 33, 4))
-    for i in range(33):
-        ref_poses[:, i, 0] = 0.5 + 0.1 * np.sin(t_ref + i * 0.1)
-        ref_poses[:, i, 1] = 0.5 + 0.1 * np.cos(t_ref + i * 0.1)
-        ref_poses[:, i, 3] = 1.0
-    
-    # User: similar but different timing and slight offset
-    t_user = np.linspace(0.2, 2*np.pi + 0.2, num_frames_user)
-    user_poses = np.zeros((num_frames_user, 33, 4))
-    for i in range(33):
-        user_poses[:, i, 0] = 0.5 + 0.1 * np.sin(t_user + i * 0.1) + 0.02  # slight offset
-        user_poses[:, i, 1] = 0.5 + 0.1 * np.cos(t_user + i * 0.1) + 0.02
-        user_poses[:, i, 3] = 1.0
-    
-    # Test alignment
-    from footylevels.alignment import align_sequences, compute_aligned_deviations, get_deviation_summary
-    
-    result = align_sequences(ref_poses, user_poses)
-    
-    print(f"\n✅ Alignment completed")
-    print(f"   Path length: {len(result.ref_indices)}")
-    print(f"   DTW distance: {result.distance:.4f}")
-    print(f"   Normalized distance: {result.normalized_distance:.4f}")
-    
-    # Test deviation computation
-    deviations = compute_aligned_deviations(ref_poses, user_poses, result)
-    summary = get_deviation_summary(deviations)
-    
-    print(f"\n   Joint 23 (left hip) deviation:")
-    print(f"   - Mean: {summary[23]['mean']:.4f}")
-    print(f"   - Max: {summary[23]['max']:.4f}")
-    
-    # Test similarity score
-    aligner = SequenceAligner()
-    similarity = aligner.get_similarity_score(result)
-    print(f"\n   Similarity score: {similarity:.1f}%")
-    
-    return result
-
-
-def test_metrics():
-    """Test metric calculations."""
-    print("=" * 50)
-    print("Testing Metric Calculations")
-    print("=" * 50)
-    
-    from footylevels.metrics import (
-        calculate_angle_3points,
-        calculate_distance,
-        calculate_hip_rotation,
-        calculate_velocity
-    )
-    
-    # Test angle calculation
-    p1 = np.array([0, 0, 0])
-    p2 = np.array([1, 0, 0])
-    p3 = np.array([1, 1, 0])
-    angle = calculate_angle_3points(p1, p2, p3)
-    print(f"\n✅ Angle calculation: {angle:.1f}° (expected: 90°)")
-    
-    # Test distance
-    dist = calculate_distance(np.array([0, 0]), np.array([3, 4]))
-    print(f"✅ Distance calculation: {dist:.1f} (expected: 5)")
-    
-    # Test hip rotation
-    left_hip = np.array([0.4, 0.5])
-    right_hip = np.array([0.6, 0.5])
-    rotation = calculate_hip_rotation(left_hip, right_hip)
-    print(f"✅ Hip rotation: {rotation:.1f}°")
-    
-    # Test velocity
-    positions = np.array([[0, 0], [1, 0], [3, 0], [6, 0]])
-    timestamps = np.array([0, 100, 200, 300])
-    velocities = calculate_velocity(positions, timestamps)
-    print(f"✅ Velocity: {velocities} (expected: [10, 20, 30])")
-
-
-def run_full_analysis(ref_video: str, user_video: str, skill: str = 'cruyff_turn', comparative: bool = False):
-    """Run full analysis pipeline."""
-    print("=" * 50)
-    print(f"Full Analysis: {skill}")
-    print("=" * 50)
-    
-    print(f"\nReference: {ref_video}")
-    print(f"User: {user_video}")
-    if comparative:
-        print("Mode: Comparative Scoring (relative to reference)")
-    else:
-        print("Mode: Absolute Scoring (relative to ideal values)")
-    
-    # Check if files exist
-    if not Path(ref_video).exists():
-        print(f"❌ Reference video not found: {ref_video}")
-        print("   Please provide video files or use --test mode")
-        return
-    
-    if not Path(user_video).exists():
-        print(f"❌ User video not found: {user_video}")
-        return
-    
-    # Run analysis
-    analyzer = SkillAnalyzer()
-    storage = AnalysisStorage()
-
-    try:
-        if comparative:
-            result = analyzer.analyze_skill_comparative(skill, ref_video, user_video)
-        else:
-            result = analyzer.analyze_skill(skill, ref_video, user_video)
-
-        # Generate feedback
-        feedback = generate_feedback(result)
-
-        print("\n" + "=" * 50)
-        print(feedback.to_text())
-        print("=" * 50)
-
-        # Save analysis
-        analysis_id = storage.save_analysis(
-            result,
-            feedback,
-            name=None,  # Auto-generate name
-            user_video_path=user_video,
-            ref_video_path=ref_video
+    missing = extractor.check_checkpoint()
+    if missing:
+        print(f"\n  Missing files:  {', '.join(missing)}")
+        print("\n  Download with:")
+        print(
+            f"    hf download facebook/sam-3d-body-dinov3 "
+            f"--local-dir {extractor.checkpoint_dir}"
         )
+        print("  (requires accepting the gated licence on Hugging Face first)")
+        return False
 
-        # Also print JSON for debugging
-        print("\n📋 JSON Output:")
-        print(json.dumps(result.to_dict(), indent=2))
+    print("\n  Checkpoint complete.")
+    return True
 
-        print(f"\n💾 Analysis saved with ID: {analysis_id}")
-        print(f"   View saved results: ls data/results/json/")
 
+def resolve_video(args, catalog: SkillCatalog) -> Path:
+    """Work out which video to process from --video or --skill."""
+    if args.video:
+        return Path(args.video)
+
+    try:
+        catalog.get_skill(args.skill)
+    except KeyError:
+        known = ", ".join(sorted(catalog.skills))
+        raise SystemExit(f"Unknown skill: {args.skill}\nKnown skills: {known}")
+
+    return REFERENCE_DIR / f"{args.skill}.mp4"
+
+
+def extract(args) -> int:
+    """Extract a body sequence from a video and save it."""
+    catalog = SkillCatalog()
+    video_path = resolve_video(args, catalog)
+
+    if not video_path.exists():
+        print(f"Video not found: {video_path}")
+        return 1
+
+    extractor = SAM3DBodyExtractor(
+        device=args.device,
+        include_vertices=args.vertices,
+    )
+
+    if not check_model(extractor):
+        return 1
+
+    print(f"\nExtracting: {video_path.name}")
+    if args.stride > 1:
+        print(f"  Processing every {args.stride} frames")
+    print("  SAM 3D Body runs one forward pass per frame — this is slow.\n")
+
+    try:
+        sequence = extractor.extract_from_video(
+            str(video_path),
+            max_frames=args.max_frames,
+            stride=args.stride,
+        )
     finally:
-        analyzer.close()
+        extractor.close()
+
+    summary = sequence.summary()
+    print("\nExtracted:")
+    for key, value in summary.items():
+        print(f"  {key:22s} {value}")
+
+    if not sequence.primary_detections:
+        print("\nNo people detected — nothing to save.")
+        return 1
+
+    storage = SequenceStorage(str(SEQUENCE_DIR))
+    sequence_id = storage.save_sequence(
+        sequence, name=video_path.stem, video_path=str(video_path)
+    )
+    print(f"\nSaved sequence: {sequence_id}")
+    print(f"  {SEQUENCE_DIR / (sequence_id + '.npz')}")
+
+    if args.render:
+        print(f"\nRendering overlay to {args.render} ...")
+        BodyVisualizer().render_video(
+            str(video_path), sequence, args.render, label_indices=args.label_joints
+        )
+        print("  Done.")
+
+    return 0
 
 
-def main():
-    parser = argparse.ArgumentParser(description="FootyLevels Demo")
-    
-    parser.add_argument('--test', action='store_true',
-                        help='Run tests with synthetic data')
-    parser.add_argument('--webcam', action='store_true',
-                        help='Test pose extraction with webcam')
-    parser.add_argument('--duration', type=float, default=5.0,
-                        help='Webcam recording duration in seconds')
-    parser.add_argument('--reference', type=str,
-                        help='Path to reference video')
-    parser.add_argument('--user', type=str,
-                        help='Path to user video')
-    parser.add_argument('--skill', type=str, default='cruyff_turn',
-                        choices=['cruyff_turn', 'step_over', 'elastico'],
-                        help='Skill to analyze')
-    parser.add_argument('--comparative', action='store_true',
-                        help='Use comparative scoring (score relative to reference)')
-    
+def list_sequences() -> int:
+    """Print every stored sequence."""
+    sequences = SequenceStorage(str(SEQUENCE_DIR)).list_sequences()
+
+    if not sequences:
+        print("No sequences stored yet.")
+        return 0
+
+    print(f"{'id':40s} {'frames':>8s} {'joints':>7s}  source")
+    print("-" * 80)
+    for meta in sequences:
+        detected = f"{meta.get('frames_with_detection', 0)}/{meta.get('total_frames', 0)}"
+        print(
+            f"{meta['id']:40s} {detected:>8s} "
+            f"{str(meta.get('num_joints', '-')):>7s}  "
+            f"{meta.get('source_video') or '-'}"
+        )
+    return 0
+
+
+def main() -> int:
+    parser = argparse.ArgumentParser(description="FootyLevels 3D body extraction demo")
+
+    source = parser.add_mutually_exclusive_group()
+    source.add_argument("--video", type=str, help="Path to a video file")
+    source.add_argument("--skill", type=str, help="Use a skill's reference video")
+
+    parser.add_argument("--check", action="store_true",
+                        help="Report checkpoint status and exit")
+    parser.add_argument("--list", action="store_true",
+                        help="List stored sequences and exit")
+    parser.add_argument("--stride", type=int, default=1,
+                        help="Process every Nth frame (default: 1)")
+    parser.add_argument("--max-frames", type=int, default=None,
+                        help="Stop after this many processed frames")
+    parser.add_argument("--vertices", action="store_true",
+                        help="Keep full meshes (~220 KB per frame)")
+    parser.add_argument("--device", type=str, default=None,
+                        choices=["cuda", "mps", "cpu"],
+                        help="Force a device (default: auto-detect)")
+    parser.add_argument("--render", type=str, default=None,
+                        help="Write an annotated overlay video here")
+    parser.add_argument("--label-joints", action="store_true",
+                        help="Label joint indices in the rendered overlay")
+
     args = parser.parse_args()
-    
-    print("\n🎯 FootyLevels - AI Soccer Skill Analysis\n")
-    
-    if args.test:
-        # Run all tests with synthetic data
-        test_metrics()
-        print()
-        test_alignment()
-        print("\n✅ All tests passed!")
-        
-    elif args.webcam:
-        # Test with webcam
-        test_pose_extraction_webcam(args.duration)
-        
-    elif args.reference and args.user:
-        # Full analysis with video files
-        run_full_analysis(args.reference, args.user, args.skill, comparative=args.comparative)
-        
-    else:
-        # Default: run quick test
-        print("Running quick test mode...\n")
-        print("For full analysis, provide video files:")
-        print("  python demo.py --reference ref.mp4 --user user.mp4\n")
-        print("For webcam test:")
-        print("  python demo.py --webcam\n")
-        
-        test_metrics()
-        print()
-        test_alignment()
+
+    print("\nFootyLevels - 3D body extraction\n")
+
+    if args.list:
+        return list_sequences()
+
+    if args.check:
+        return 0 if check_model(SAM3DBodyExtractor(device=args.device)) else 1
+
+    if not args.video and not args.skill:
+        parser.print_help()
+        return 0
+
+    return extract(args)
 
 
 if __name__ == "__main__":
-    main()
+    sys.exit(main())

@@ -1,260 +1,242 @@
 """
 Storage Module
-Save and load analysis results.
+Save and load extracted body sequences.
+
+Keypoint arrays go to a compressed .npz; metadata goes to a sibling .json so it
+can be listed and inspected without loading the arrays.
+
+Only the primary subject of each frame is persisted — these videos are of one
+player, and keeping every detection would bloat the payload for no gain.
 """
 
 import json
-from pathlib import Path
 from datetime import datetime
-from typing import Optional, List
-import pickle
+from pathlib import Path
+from typing import List, Optional
+
+import numpy as np
+
+from .body_extractor import BodyDetection, BodyFrame, BodySequence
+
+# Per-detection fields persisted alongside the keypoints, when the model
+# supplies them and their shape is consistent across frames.
+OPTIONAL_FIELDS = (
+    "cam_t",
+    "shape_params",
+    "body_pose_params",
+    "hand_pose_params",
+    "vertices",
+)
 
 
-class AnalysisStorage:
+def _stack_optional(detections: List[BodyDetection], field: str) -> Optional[np.ndarray]:
+    """Stack one optional field across detections, or None if unusable.
+
+    Returns None when any frame is missing the field or the shapes disagree,
+    so a partially-populated field never produces a misleading ragged array.
     """
-    Save and retrieve analysis results.
+    values = [getattr(d, field, None) for d in detections]
+    if not values or any(v is None for v in values):
+        return None
+    shapes = {np.asarray(v).shape for v in values}
+    if len(shapes) != 1:
+        return None
+    return np.stack([np.asarray(v) for v in values])
+
+
+class SequenceStorage:
+    """
+    Save and retrieve extracted body sequences.
 
     Usage:
-        storage = AnalysisStorage()
-        storage.save_analysis(result, feedback, "my_attempt")
-        results = storage.list_analyses()
+        storage = SequenceStorage()
+        sequence_id = storage.save_sequence(sequence, name="cruyff_turn")
+        restored = storage.load_sequence(sequence_id)
     """
 
-    def __init__(self, storage_dir: str = "data/results"):
+    def __init__(self, storage_dir: str = "data/sequences"):
         """
-        Initialize storage.
-
         Args:
-            storage_dir: Directory to store analysis results
+            storage_dir: Directory to store sequences in.
         """
         self.storage_dir = Path(storage_dir)
         self.storage_dir.mkdir(parents=True, exist_ok=True)
 
-        self.json_dir = self.storage_dir / "json"
-        self.json_dir.mkdir(exist_ok=True)
+    def _json_path(self, sequence_id: str) -> Path:
+        return self.storage_dir / f"{sequence_id}.json"
 
-        self.pickle_dir = self.storage_dir / "pickle"
-        self.pickle_dir.mkdir(exist_ok=True)
+    def _npz_path(self, sequence_id: str) -> Path:
+        return self.storage_dir / f"{sequence_id}.npz"
 
-    def save_analysis(
+    def save_sequence(
         self,
-        analysis_result,
-        feedback=None,
+        sequence: BodySequence,
         name: Optional[str] = None,
-        user_video_path: Optional[str] = None,
-        ref_video_path: Optional[str] = None
+        video_path: Optional[str] = None,
     ) -> str:
         """
-        Save analysis result.
+        Save a body sequence.
 
         Args:
-            analysis_result: AnalysisResult object
-            feedback: StructuredFeedback object (optional)
-            name: Custom name for this analysis
-            user_video_path: Path to user video (for reference)
-            ref_video_path: Path to reference video
+            sequence: BodySequence to persist.
+            name: Base name for the saved files. Defaults to the video stem.
+            video_path: Source video, recorded in the metadata.
 
         Returns:
-            ID of saved analysis
+            The id the sequence was saved under.
         """
-        # Generate unique ID
         timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-        if name:
-            analysis_id = f"{name}_{timestamp}"
-        else:
-            analysis_id = f"{analysis_result.skill_name.lower().replace(' ', '_')}_{timestamp}"
+        if name is None:
+            name = Path(video_path).stem if video_path else "sequence"
+        sequence_id = f"{name}_{timestamp}"
 
-        # Prepare data
-        data = {
-            "id": analysis_id,
-            "timestamp": datetime.now().isoformat(),
-            "skill": analysis_result.skill_name,
-            "analysis": analysis_result.to_dict(),
-            "user_video": str(user_video_path) if user_video_path else None,
-            "reference_video": str(ref_video_path) if ref_video_path else None
+        detections = sequence.primary_detections
+        detected = sequence.detected_frames
+
+        arrays = {
+            "frame_index": np.array([f.frame_index for f in detected], dtype=np.int64),
+            "timestamp_ms": np.array([f.timestamp_ms for f in detected], dtype=np.float64),
         }
+        if detections:
+            arrays["keypoints_3d"] = sequence.keypoints_3d()
+            arrays["keypoints_2d"] = sequence.keypoints_2d()
+            arrays["focal_length"] = np.array(
+                [d.focal_length if d.focal_length is not None else np.nan
+                 for d in detections],
+                dtype=np.float64,
+            )
+            for field in OPTIONAL_FIELDS:
+                stacked = _stack_optional(detections, field)
+                if stacked is not None:
+                    arrays[field] = stacked
+        if sequence.faces is not None:
+            arrays["faces"] = sequence.faces
 
-        if feedback:
-            data["feedback"] = feedback.to_dict()
+        np.savez_compressed(self._npz_path(sequence_id), **arrays)
 
-        # Save as JSON
-        json_path = self.json_dir / f"{analysis_id}.json"
-        with open(json_path, 'w') as f:
-            json.dump(data, f, indent=2)
+        metadata = {
+            "id": sequence_id,
+            "created_at": datetime.now().isoformat(),
+            "source_video": str(video_path) if video_path else None,
+            "arrays": sorted(arrays.keys()),
+            "empty_frames": [
+                f.frame_index for f in sequence.frames if f.primary is None
+            ],
+            **sequence.summary(),
+        }
+        with open(self._json_path(sequence_id), "w") as f:
+            json.dump(metadata, f, indent=2)
 
-        # Save full objects as pickle (for later reprocessing)
-        pickle_path = self.pickle_dir / f"{analysis_id}.pkl"
-        with open(pickle_path, 'wb') as f:
-            pickle.dump({
-                "analysis_result": analysis_result,
-                "feedback": feedback,
-                "metadata": data
-            }, f)
+        return sequence_id
 
-        print(f"✅ Analysis saved: {analysis_id}")
-        print(f"   JSON: {json_path}")
-
-        return analysis_id
-
-    def load_analysis(self, analysis_id: str) -> dict:
+    def load_metadata(self, sequence_id: str) -> dict:
         """
-        Load analysis by ID.
+        Load just the metadata for a sequence.
 
-        Args:
-            analysis_id: ID of the analysis
-
-        Returns:
-            Dictionary with analysis data
+        Raises:
+            FileNotFoundError: If the sequence does not exist.
         """
-        json_path = self.json_dir / f"{analysis_id}.json"
-
-        if not json_path.exists():
-            raise FileNotFoundError(f"Analysis not found: {analysis_id}")
-
-        with open(json_path, 'r') as f:
+        path = self._json_path(sequence_id)
+        if not path.exists():
+            raise FileNotFoundError(f"Sequence not found: {sequence_id}")
+        with open(path, "r") as f:
             return json.load(f)
 
-    def load_analysis_objects(self, analysis_id: str) -> dict:
+    def load_sequence(self, sequence_id: str) -> BodySequence:
         """
-        Load full analysis objects (from pickle).
+        Load a full sequence back into BodySequence form.
 
-        Returns:
-            Dict with analysis_result, feedback, and metadata
+        Frames that had no detection are restored as empty frames.
+
+        Raises:
+            FileNotFoundError: If the sequence does not exist.
         """
-        pickle_path = self.pickle_dir / f"{analysis_id}.pkl"
+        metadata = self.load_metadata(sequence_id)
 
-        if not pickle_path.exists():
-            raise FileNotFoundError(f"Analysis objects not found: {analysis_id}")
+        npz_path = self._npz_path(sequence_id)
+        if not npz_path.exists():
+            raise FileNotFoundError(f"Sequence arrays not found: {sequence_id}")
 
-        with open(pickle_path, 'rb') as f:
-            return pickle.load(f)
+        with np.load(npz_path) as data:
+            arrays = {key: data[key] for key in data.files}
 
-    def list_analyses(self, skill: Optional[str] = None) -> List[dict]:
-        """
-        List all saved analyses.
+        frames: List[BodyFrame] = []
+        frame_indices = arrays.get("frame_index", np.array([], dtype=np.int64))
+        timestamps = arrays.get("timestamp_ms", np.array([], dtype=np.float64))
 
-        Args:
-            skill: Filter by skill name (optional)
+        for i, frame_index in enumerate(frame_indices):
+            focal = arrays.get("focal_length")
+            focal_value = float(focal[i]) if focal is not None else None
+            if focal_value is not None and np.isnan(focal_value):
+                focal_value = None
 
-        Returns:
-            List of analysis summaries
-        """
-        analyses = []
+            detection = BodyDetection(
+                keypoints_3d=arrays["keypoints_3d"][i],
+                keypoints_2d=arrays["keypoints_2d"][i],
+                cam_t=arrays["cam_t"][i] if "cam_t" in arrays else None,
+                focal_length=focal_value,
+                shape_params=arrays["shape_params"][i] if "shape_params" in arrays else None,
+                body_pose_params=(
+                    arrays["body_pose_params"][i] if "body_pose_params" in arrays else None
+                ),
+                hand_pose_params=(
+                    arrays["hand_pose_params"][i] if "hand_pose_params" in arrays else None
+                ),
+                vertices=arrays["vertices"][i] if "vertices" in arrays else None,
+            )
+            frames.append(
+                BodyFrame(
+                    frame_index=int(frame_index),
+                    timestamp_ms=float(timestamps[i]),
+                    detections=[detection],
+                )
+            )
 
-        for json_file in sorted(self.json_dir.glob("*.json"), reverse=True):
-            with open(json_file, 'r') as f:
-                data = json.load(f)
+        for frame_index in metadata.get("empty_frames", []):
+            frames.append(BodyFrame(frame_index=int(frame_index), timestamp_ms=0.0))
+        frames.sort(key=lambda f: f.frame_index)
 
-                # Filter by skill if specified
-                if skill and data['skill'].lower() != skill.lower():
-                    continue
+        return BodySequence(
+            frames=frames,
+            fps=metadata.get("fps", 0.0),
+            width=metadata.get("width", 0),
+            height=metadata.get("height", 0),
+            duration_ms=metadata.get("duration_ms", 0.0),
+            model_id=metadata.get("model_id", ""),
+            faces=arrays.get("faces"),
+        )
 
-                analyses.append({
-                    "id": data['id'],
-                    "timestamp": data['timestamp'],
-                    "skill": data['skill'],
-                    "overall_score": data['analysis']['overall_score'],
-                    "overall_rating": data.get('feedback', {}).get('overall_rating', 'unknown')
-                })
+    def list_sequences(self) -> List[dict]:
+        """Every saved sequence's metadata, newest first."""
+        sequences = []
+        for path in sorted(self.storage_dir.glob("*.json"), reverse=True):
+            with open(path, "r") as f:
+                sequences.append(json.load(f))
+        return sequences
 
-        return analyses
-
-    def delete_analysis(self, analysis_id: str):
-        """Delete an analysis."""
-        json_path = self.json_dir / f"{analysis_id}.json"
-        pickle_path = self.pickle_dir / f"{analysis_id}.pkl"
-
-        if json_path.exists():
-            json_path.unlink()
-
-        if pickle_path.exists():
-            pickle_path.unlink()
-
-        print(f"Deleted analysis: {analysis_id}")
-
-    def export_to_csv(self, output_path: str, skill: Optional[str] = None):
-        """
-        Export analyses to CSV.
-
-        Args:
-            output_path: Where to save CSV
-            skill: Filter by skill (optional)
-        """
-        import csv
-
-        analyses = self.list_analyses(skill)
-
-        if not analyses:
-            print("No analyses to export")
-            return
-
-        with open(output_path, 'w', newline='') as f:
-            writer = csv.DictWriter(f, fieldnames=[
-                'id', 'timestamp', 'skill', 'overall_score', 'overall_rating'
-            ])
-            writer.writeheader()
-            writer.writerows(analyses)
-
-        print(f"Exported {len(analyses)} analyses to {output_path}")
-
-    def get_progress_summary(self, skill: str) -> dict:
-        """
-        Get progress summary for a skill over time.
-
-        Args:
-            skill: Skill name
-
-        Returns:
-            Dict with progress statistics
-        """
-        analyses = self.list_analyses(skill)
-
-        if not analyses:
-            return {
-                "skill": skill,
-                "total_attempts": 0,
-                "average_score": 0,
-                "best_score": 0,
-                "latest_score": 0
-            }
-
-        scores = [a['overall_score'] for a in analyses]
-
-        return {
-            "skill": skill,
-            "total_attempts": len(analyses),
-            "average_score": sum(scores) / len(scores),
-            "best_score": max(scores),
-            "latest_score": scores[0],  # Most recent
-            "improvement": scores[0] - scores[-1] if len(scores) > 1 else 0
-        }
+    def delete_sequence(self, sequence_id: str) -> None:
+        """Delete a sequence's metadata and arrays."""
+        for path in (self._json_path(sequence_id), self._npz_path(sequence_id)):
+            if path.exists():
+                path.unlink()
 
 
-def save_analysis_result(
-    analysis_result,
-    feedback=None,
+def save_sequence(
+    sequence: BodySequence,
     name: Optional[str] = None,
-    storage_dir: str = "data/results"
+    video_path: Optional[str] = None,
+    storage_dir: str = "data/sequences",
 ) -> str:
     """
-    Convenience function to save an analysis.
+    Save a body sequence in one call.
 
     Args:
-        analysis_result: AnalysisResult object
-        feedback: StructuredFeedback object
-        name: Custom name
-        storage_dir: Storage directory
+        sequence: BodySequence to persist.
+        name: Base name for the saved files.
+        video_path: Source video, recorded in the metadata.
+        storage_dir: Directory to store the sequence in.
 
     Returns:
-        Analysis ID
+        The id the sequence was saved under.
     """
-    storage = AnalysisStorage(storage_dir)
-    return storage.save_analysis(analysis_result, feedback, name)
-
-
-# Quick test
-if __name__ == "__main__":
-    print("Storage module loaded successfully.")
-    print("\nTo save analysis results:")
-    print("  storage = AnalysisStorage()")
-    print("  storage.save_analysis(result, feedback, 'my_attempt')")
+    return SequenceStorage(storage_dir).save_sequence(sequence, name, video_path)

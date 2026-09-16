@@ -1,16 +1,34 @@
 # FootyLevels Dependencies
+#
+# SAM 3D Body is NOT on PyPI. Install it from source first, following upstream:
+#   https://github.com/facebookresearch/sam-3d-body/blob/main/INSTALL.md
+# It targets Python 3.11 and pulls detectron2 in from git. Install the torch
+# build that matches your platform from pytorch.org before the rest.
+#
+# The checkpoint is gated. Accept the licence, then:
+#   hf download facebook/sam-3d-body-dinov3 \
+#       --local-dir models/checkpoints/sam-3d-body-dinov3
 
-# Core ML/CV
-mediapipe>=0.10.0
+# Core CV / numerics
 opencv-python>=4.8.0
 numpy>=1.24.0
 
-# Video processing
-ffmpeg-python>=0.2.0
+# SAM 3D Body runtime
+torch>=2.2.0
+torchvision>=0.17.0
+pytorch-lightning>=2.0.0
+timm>=0.9.0
+einops>=0.7.0
+hydra-core>=1.3.0
+yacs>=0.1.8
+scikit-image>=0.22.0
+dill>=0.3.7
+pandas>=2.0.0
+rich>=13.0.0
+pyrender>=0.1.45
 
-# Time series alignment
-dtaidistance>=2.3.0
-fastdtw>=0.3.4
+# Checkpoint download
+huggingface-hub>=0.23.0
 
 # API
 fastapi>=0.100.0
@@ -23,15 +41,6 @@ pydantic>=2.0.0
 
 # Visualization
 matplotlib>=3.7.0
-plotly>=5.15.0
 
 # Testing
 pytest>=7.4.0
-pytest-asyncio>=0.21.0
-
-# Development
-ipython>=8.14.0
-jupyter>=1.0.0
-
-# Optional: GPU acceleration (uncomment if needed)
-# tensorflow>=2.13.0

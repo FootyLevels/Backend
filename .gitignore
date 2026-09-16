@@ -8,3 +8,15 @@ wheels/
 
 # Virtual environments
 .venv
+
+# Model checkpoints (SAM 3D Body is ~2.8 GB and gated - download, don't commit)
+models/
+
+# Extracted body sequences
+data/sequences/
+
+# macOS
+.DS_Store
+
+# Test cache
+.pytest_cache/

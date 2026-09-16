@@ -1,206 +1,199 @@
 # FootyLevels ⚽
 
-AI-powered soccer skill analysis. Compare your technique against professional players and get actionable feedback.
+3D body extraction for soccer skill video, powered by Meta's
+[SAM 3D Body](https://github.com/facebookresearch/sam-3d-body).
 
-## Quick Start
+Point it at a clip of a skill move and get a per-frame 3D reconstruction of the
+player's body, built on the Momentum Human Rig (MHR).
+
+> **Scoring is not implemented.** This repo currently does extraction only.
+> The previous MediaPipe-based scoring, feedback, and DTW alignment layers were
+> removed — see the git history if you need them back.
+
+## Pipeline
+
+```
+video → SAM 3D Body (per frame) → BodySequence → store / visualize
+            ↓
+      MHR mesh + 3D joints
+```
+
+SAM 3D Body is a **single-image** model, so video is handled by running one
+forward pass per frame. There is no temporal smoothing and no tracking.
+
+## Setup
+
+### 1. Python environment
+
+Upstream targets **Python 3.11**.
 
 ```bash
-# Clone and setup
-cd footylevels
+uv venv --python 3.11
+source .venv/bin/activate      # Windows: .venv\Scripts\activate
 pip install -r requirements.txt
-
-# Run tests
-python scripts/demo.py --test
-
-# Test with webcam
-python scripts/demo.py --webcam
-
-# Analyze videos
-python scripts/demo.py --reference ref.mp4 --user my_attempt.mp4 --skill cruyff_turn
-
-# Start API server
-source .venv/bin/activate  # Activate venv if not already active
-cd api
-python -m uvicorn main:app --reload
 ```
 
-## Features
+### 2. Install SAM 3D Body
 
-- 🎯 **Pose Extraction**: Uses MediaPipe for accurate body tracking
-- 🔄 **Video Alignment**: DTW algorithm handles different video lengths/speeds
-- 📊 **Metric Calculation**: Joint angles, rotations, velocities
-- 💬 **Actionable Feedback**: Human-readable tips and scores
-- 🌐 **REST API**: Ready for mobile/web integration
+It is not on PyPI. Follow
+[INSTALL.md](https://github.com/facebookresearch/sam-3d-body/blob/main/INSTALL.md)
+upstream — it needs a platform-matched torch build and pulls detectron2 from git.
 
-## Supported Skills
+### 3. Download the checkpoint
 
-| Skill | Difficulty | Key Checkpoints |
-|-------|------------|-----------------|
-| Cruyff Turn | Intermediate | Hip rotation, plant foot, shoulder fake |
-| Step Over | Beginner | Foot arc, body lean, move speed |
-| Elastico | Advanced | Ankle rotation, ball control, fluidity |
-
-## Architecture
-
-```
-User Video → Pose Extraction → Alignment → Metrics → Feedback
-                    ↓              ↓          ↓
-              MediaPipe         DTW      Checkpoints
-                    ↓              ↓          ↓
-              33 landmarks    Frame map   Scores + Tips
-```
-
-## API Usage
+The weights are **gated**: request access on the
+[model page](https://huggingface.co/facebook/sam-3d-body-dinov3) and accept the
+licence first. Then (~2.8 GB):
 
 ```bash
-# Start the API server (with venv activated)
-cd api
-python -m uvicorn main:app --reload
-
-# In another terminal, test the API
-# List available skills
-curl http://localhost:8000/api/skills
-
-# Quick analyze (uses pre-stored reference video)
-curl -X POST http://localhost:8000/api/analyze/quick \
-  -F "skill=cruyff_turn" \
-  -F "user_video=@my_attempt.mp4"
-
-# Full analyze (with custom reference video)
-curl -X POST http://localhost:8000/api/analyze \
-  -F "skill=cruyff_turn" \
-  -F "reference_video=@reference.mp4" \
-  -F "user_video=@my_attempt.mp4"
+hf download facebook/sam-3d-body-dinov3 \
+    --local-dir models/checkpoints/sam-3d-body-dinov3
 ```
 
-## Example Output
+Confirm it landed:
 
-```json
-{
-  "skill_name": "Cruyff Turn",
-  "overall_score": 72.5,
-  "overall_rating": "good",
-  "summary": "Good Cruyff Turn! You've got the basics down with room for refinement.",
-  "improvements": [
-    {
-      "title": "Hip Rotation",
-      "detail": "Rotate your hips more fully - aim for a complete 180° turn",
-      "current_value": 135.2,
-      "target_value": 180.0
-    }
-  ],
-  "tips": [
-    {
-      "title": "Practice Tip",
-      "detail": "Practice the move slowly first, focusing on the drag behind your standing leg"
-    }
-  ]
-}
+```bash
+python scripts/demo.py --check
 ```
 
-## Project Structure
+`models/` is gitignored — never commit the weights.
+
+## Usage
+
+### CLI
+
+```bash
+# Check checkpoint status and which device will be used
+python scripts/demo.py --check
+
+# Extract from a video file
+python scripts/demo.py --video data/reference/cruyff_turn.mp4
+
+# Extract from a skill's stored reference video, every 3rd frame
+python scripts/demo.py --skill cruyff_turn --stride 3
+
+# Extract and write an annotated overlay video
+python scripts/demo.py --video my_clip.mp4 --render out/annotated.mp4
+
+# List everything extracted so far
+python scripts/demo.py --list
+```
+
+Inference is slow — an 840M-parameter forward pass per frame. Use `--stride` and
+`--max-frames` while iterating, and `--device` to override auto-detection.
+
+### Library
+
+```python
+from footylevels import SAM3DBodyExtractor, SequenceStorage
+
+extractor = SAM3DBodyExtractor()
+sequence = extractor.extract_from_video("data/reference/cruyff_turn.mp4", stride=2)
+
+print(sequence.summary())
+print(sequence.keypoints_3d().shape)     # (frames, joints, 3) metres, camera frame
+print(sequence.joint_trajectory(5).shape)  # (frames, 3)
+
+SequenceStorage().save_sequence(sequence, name="cruyff_turn")
+```
+
+### API
+
+```bash
+source .venv/bin/activate
+cd api && python -m uvicorn main:app --reload
+```
+
+| Endpoint | Purpose |
+|---|---|
+| `GET /api/model/status` | Checkpoint present? Which device? |
+| `POST /api/extract` | Queue extraction for an uploaded video |
+| `GET /api/extract/{job_id}` | Poll a queued extraction |
+| `GET /api/sequences` | List stored sequences |
+| `GET /api/sequences/{id}` | One sequence's metadata |
+| `GET /api/sequences/{id}/keypoints` | Its 3D + 2D keypoints |
+| `DELETE /api/sequences/{id}` | Delete a sequence |
+| `GET /api/skills`, `/api/skills/{id}` | Skill catalog |
+| `GET /api/players`, `/api/players/{id}` | Player catalog |
+| `GET /api/categories`, `/api/progression` | Browsing structure |
+
+Extraction is queued rather than inline, because a short clip can still take
+minutes:
+
+```bash
+curl -X POST http://localhost:8000/api/extract \
+  -F "video=@my_clip.mp4" -F "name=my_attempt" -F "stride=3"
+# -> {"job_id": "...", "status": "queued", ...}
+
+curl http://localhost:8000/api/extract/<job_id>
+```
+
+The job table is in-memory — it does not survive a restart. Swap in Redis or a
+database before this runs anywhere real.
+
+## Output format
+
+Per detected person, per frame, SAM 3D Body returns:
+
+| Field | Meaning |
+|---|---|
+| `keypoints_3d` | `(J, 3)` camera-frame joints in **metres**, including camera translation |
+| `keypoints_2d` | `(J, 2)` pixels on the source image |
+| `vertices` | `(18439, 3)` MHR mesh — opt-in via `include_vertices` |
+| `cam_t`, `focal_length` | Estimated camera parameters |
+| `shape_params`, `body_pose_params`, `hand_pose_params` | Interpretable MHR parameters |
+
+Joint count and ordering come from the loaded MHR asset and are **not** hardcoded
+anywhere in this repo. To work out which indices matter for a given skill, render
+with labels:
+
+```bash
+python scripts/demo.py --video clip.mp4 --render out.mp4 --label-joints
+```
+
+Sequences are stored as a compressed `.npz` of arrays plus a sibling `.json` of
+metadata, under `data/sequences/`. Only the primary (largest) subject per frame
+is persisted.
+
+## Project structure
 
 ```
-footylevels/
+Backend/
 ├── src/footylevels/
-│   ├── pose_extractor.py   # MediaPipe pose extraction
-│   ├── alignment.py        # DTW sequence alignment
-│   ├── metrics.py          # Angle/distance calculations
-│   ├── analyzer.py         # Main orchestration
-│   └── feedback.py         # Feedback generation
-├── api/
-│   └── main.py             # FastAPI server
-├── config/
-│   └── skills.yaml         # Skill definitions
-├── scripts/
-│   └── demo.py             # Demo/test script
+│   ├── body_extractor.py   # SAM 3D Body wrapper, BodySequence data model
+│   ├── catalog.py          # Skill/player catalog reader
+│   ├── storage.py          # Sequence persistence (npz + json)
+│   ├── video_processor.py  # Video IO utilities
+│   ├── visualizer.py       # Keypoint overlays, trajectory plots
+│   └── metrics.py          # Geometry/kinematics helpers
+├── api/main.py             # FastAPI server
+├── config/skills.yaml      # Catalog metadata only
+├── scripts/demo.py         # Extraction CLI
+├── models/checkpoints/     # SAM 3D Body weights (gitignored)
 └── data/
-    ├── reference/          # Pro reference videos
-    └── samples/            # Test videos
+    ├── reference/          # Reference videos
+    └── sequences/          # Extracted output (gitignored)
 ```
-
-## Adding New Skills
-
-Edit `config/skills.yaml`:
-
-```yaml
-skills:
-  your_skill:
-    name: "Your Skill"
-    description: "Description"
-    checkpoints:
-      - id: checkpoint_1
-        name: "Checkpoint Name"
-        metric_type: rotation_angle
-        ideal_value: 90
-        feedback:
-          good: "Great job!"
-          poor: "Work on this..."
-```
-
-## Installation
-
-### From source
-
-```bash
-# Clone the repository
-git clone https://github.com/yourusername/footylevels.git
-cd footylevels
-
-# Create virtual environment (Python 3.11 recommended for MediaPipe compatibility)
-python3.11 -m venv .venv
-source .venv/bin/activate  # On Windows: .venv\Scripts\activate
-
-# Install dependencies
-pip install -r requirements.txt
-
-# Or install as package
-pip install -e .
-```
-
-### Requirements
-
-- Python 3.8+
-- OpenCV
-- MediaPipe
-- NumPy
-- FastAPI (for API)
 
 ## Development
 
 ```bash
-# Activate virtual environment
-source .venv/bin/activate  # On Windows: .venv\Scripts\activate
-
-# Install dev dependencies
-pip install -e ".[dev]"
-
-# Run tests
 pytest tests/ -v
-
-# Run specific tests
-pytest tests/test_metrics.py
-
-# Format code
-black src/
-
-# Type check
-mypy src/
 ```
 
-## Next Steps
+The suite runs without SAM 3D Body installed and without the checkpoint — it
+covers the data model, output parsing, storage round-trip, and catalog integrity.
 
-- [ ] Add more soccer skills
-- [ ] Ball tracking integration
-- [ ] Real-time analysis mode
-- [ ] Mobile app (React Native)
-- [ ] Training progress tracking
+## Known gaps
+
+- **`data/reference/elastico.mp4` is a byte-identical copy of `cruyff_turn.mp4`.**
+  It needs replacing with real elastico footage.
+- No reference videos for the other six skills in the catalog.
+- `scripts/download_sample_videos.py` still points at `example.com` placeholders.
+- The catalog's `video_url` / `image_url` / `thumbnail_url` fields reference
+  assets that do not exist in this repo and are not served by the API.
 
 ## Credits
 
-- Pose estimation: [MediaPipe](https://mediapipe.dev/)
-- Inspired by: [BeONE Sports](https://beonesports.com), [PoseSync](https://github.com/infocusp/posesync)
-
----
-
-Built with ❤️ for soccer players everywhere.
+- 3D body model: [SAM 3D Body](https://github.com/facebookresearch/sam-3d-body) /
+  [MHR](https://github.com/facebookresearch/MHR), Meta Superintelligence Labs
