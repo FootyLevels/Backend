@@ -13,7 +13,10 @@
 opencv-python>=4.8.0
 numpy>=1.24.0
 
-# SAM 3D Body runtime
+# SAM 3D Body runtime.
+# NOTE: sam_3d_body has no setup.py — clone the repo and put its root on
+# sys.path (see README). braceexpand/roma/termcolor are undeclared transitive
+# imports it needs, and detectron2 must come from the pinned git commit.
 torch>=2.2.0
 torchvision>=0.17.0
 pytorch-lightning>=2.0.0
@@ -26,6 +29,9 @@ dill>=0.3.7
 pandas>=2.0.0
 rich>=13.0.0
 pyrender>=0.1.45
+braceexpand>=0.1.7
+roma>=1.5.0
+termcolor>=2.4.0
 
 # Checkpoint download
 huggingface-hub>=0.23.0
@@ -38,6 +44,9 @@ python-multipart>=0.0.6  # For file uploads
 # Data handling
 pyyaml>=6.0
 pydantic>=2.0.0
+
+# USDZ export for Apple RealityKit
+usd-core>=25.0
 
 # Visualization
 matplotlib>=3.7.0

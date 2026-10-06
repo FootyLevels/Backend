@@ -201,5 +201,16 @@ class TestDeviceResolution:
         assert resolve_device("cpu") == "cpu"
         assert resolve_device("cuda") == "cuda"
 
-    def test_auto_detect_returns_a_known_device(self):
-        assert resolve_device() in {"cuda", "mps", "cpu"}
+    def test_auto_detect_never_returns_mps(self):
+        """MPS cannot run this model, so it must never be chosen automatically.
+
+        The MHR backend is a TorchScript module that computes skeleton state in
+        float64; MPS has no float64 support, and being compiled it cannot be
+        patched. Auto-selecting MPS would fail partway through inference.
+        """
+        assert resolve_device() in {"cuda", "cpu"}
+
+    def test_explicit_mps_warns(self):
+        """Honoured if forced, but the caller should know it will fail."""
+        with pytest.warns(RuntimeWarning, match="float64"):
+            assert resolve_device("mps") == "mps"

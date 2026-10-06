@@ -12,8 +12,12 @@ wheels/
 # Model checkpoints (SAM 3D Body is ~2.8 GB and gated - download, don't commit)
 models/
 
-# Extracted body sequences
+# Vendored upstream source (cloned, not authored here)
+vendor/
+
+# Extracted body sequences and generated meshes
 data/sequences/
+data/output/
 
 # macOS
 .DS_Store

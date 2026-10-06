@@ -172,12 +172,25 @@ class BodySequence:
 
 
 def resolve_device(device: Optional[str] = None) -> str:
-    """Pick a torch device, preferring CUDA, then Apple MPS, then CPU.
+    """Pick a torch device: CUDA when present, otherwise CPU.
 
-    Upstream SAM 3D Body does not document MPS support, so MPS is selected on
-    Apple Silicon only as a best effort and warns. Pass `device` to override.
+    MPS is deliberately excluded from auto-detection. The MHR backend inside
+    mhr_model.pt is a TorchScript module that computes skeleton state in
+    float64, and Apple's MPS backend has no float64 support at all. Because
+    that code is compiled into the serialized model it cannot be patched, so
+    MPS fails partway through inference rather than merely running slowly.
+
+    Passing device='mps' explicitly is still honoured, but it will raise
+    "Cannot convert a MPS Tensor to float64 dtype" during the pose branch.
     """
     if device is not None:
+        if device == "mps":
+            warnings.warn(
+                "SAM 3D Body cannot run on MPS: its TorchScript MHR backend "
+                "requires float64, which MPS does not support. Use 'cpu'.",
+                RuntimeWarning,
+                stacklevel=2,
+            )
         return device
 
     try:
@@ -185,17 +198,74 @@ def resolve_device(device: Optional[str] = None) -> str:
     except ImportError:
         return "cpu"
 
-    if torch.cuda.is_available():
-        return "cuda"
-    if getattr(torch.backends, "mps", None) is not None and torch.backends.mps.is_available():
-        warnings.warn(
-            "Using Apple MPS for SAM 3D Body. Upstream does not document MPS "
-            "support, so fall back to device='cpu' if you hit unsupported ops.",
-            RuntimeWarning,
-            stacklevel=2,
-        )
-        return "mps"
-    return "cpu"
+    return "cuda" if torch.cuda.is_available() else "cpu"
+
+
+def _redirect_upstream_cuda(device: str) -> None:
+    """Make upstream's hardcoded CUDA transfers honour the chosen device.
+
+    SAM 3D Body hardcodes CUDA in two ways: `recursive_to(batch, "cuda")` with
+    a literal string in three places, and five bare `tensor.cuda()` calls in the
+    pose branch and hand decoders. All are unconditional, so inference raises
+    "Torch not compiled with CUDA enabled" on any machine without CUDA —
+    including every Mac, whether the target device is MPS or CPU.
+
+    Rather than editing the vendored source, which would be lost on re-clone,
+    both routes are redirected here. Note that patching `torch.Tensor.cuda` is
+    process-global: every `.cuda()` in this interpreter lands on `device`
+    afterwards. That is the intent — this process exists to run this model —
+    but it is worth knowing if other torch code shares the process.
+
+    No-op when already running on CUDA.
+    """
+    if device == "cuda":
+        return
+
+    import torch
+
+    from sam_3d_body import sam_3d_body_estimator
+    from sam_3d_body.models.meta_arch import sam3d_body
+
+    # Covers every bare `.cuda()` call site at once.
+    if not getattr(torch.Tensor.cuda, "_footylevels_patched", False):
+        def tensor_to_device(self, *args, **kwargs):
+            return self.to(device)
+
+        tensor_to_device._footylevels_patched = True
+        torch.Tensor.cuda = tensor_to_device
+
+    for module in (sam_3d_body_estimator, sam3d_body):
+        original = getattr(module, "recursive_to", None)
+        if original is None or getattr(original, "_footylevels_patched", False):
+            continue
+
+        def redirected(x, target, _original=original, _device=device):
+            if target == "cuda":
+                target = _device
+            if str(target).startswith("mps"):
+                x = _downcast_float64(x)
+            return _original(x, target)
+
+        setattr(redirected, "_footylevels_patched", True)
+        module.recursive_to = redirected
+
+
+def _downcast_float64(value):
+    """Recursively cast float64 tensors to float32.
+
+    Apple's MPS backend has no float64 support, and upstream's batches carry
+    double-precision bookkeeping tensors alongside the image data. Inference
+    runs in float32 regardless, so narrowing on transfer costs nothing.
+    """
+    import torch
+
+    if torch.is_tensor(value):
+        return value.to(torch.float32) if value.dtype == torch.float64 else value
+    if isinstance(value, dict):
+        return {k: _downcast_float64(v) for k, v in value.items()}
+    if isinstance(value, (list, tuple)):
+        return type(value)(_downcast_float64(v) for v in value)
+    return value
 
 
 class SAM3DBodyExtractor:
@@ -260,14 +330,26 @@ class SAM3DBodyExtractor:
     def _build_estimator(self):
         """Construct the upstream estimator.
 
-        The SAM 3D Body package exposes more than one entry point depending on
-        how it was installed, so the known ones are tried in order and a single
-        actionable error is raised if none resolve.
+        Raises ImportError only when the sam_3d_body package itself cannot be
+        found. Anything that goes wrong after that — a missing transitive
+        dependency, a bad checkpoint — is allowed to propagate as itself rather
+        than being reported as a missing entry point.
         """
-        attempts = []
+        try:
+            import sam_3d_body  # noqa: F401
+        except ImportError as exc:
+            raise ImportError(
+                f"Could not import sam_3d_body ({exc}).\n"
+                f"It is not on PyPI — clone it and put the repo root on sys.path:\n"
+                f"  git clone https://github.com/facebookresearch/sam-3d-body.git\n"
+                f"See https://github.com/facebookresearch/sam-3d-body/blob/main/INSTALL.md"
+            ) from exc
 
-        # Preferred: load from a local checkpoint directory.
-        if self.hf_repo_id is None:
+        from sam_3d_body import SAM3DBodyEstimator, load_sam_3d_body, load_sam_3d_body_hf
+
+        if self.hf_repo_id is not None:
+            model, model_cfg = load_sam_3d_body_hf(self.hf_repo_id, device=self.device)
+        else:
             missing = self.check_checkpoint()
             if missing:
                 raise FileNotFoundError(
@@ -278,32 +360,18 @@ class SAM3DBodyExtractor:
                     f"(requires accepting the gated licence on Hugging Face first)"
                 )
 
-            try:
-                from sam_3d_body import load_sam_3d_body, SAM3DBodyEstimator
+            model, model_cfg = load_sam_3d_body(
+                str(self.checkpoint_path),
+                device=self.device,
+                mhr_path=str(self.mhr_path),
+            )
 
-                model, model_cfg = load_sam_3d_body(
-                    str(self.checkpoint_path),
-                    device=self.device,
-                    mhr_path=str(self.mhr_path),
-                )
-                return SAM3DBodyEstimator(model, model_cfg)
-            except ImportError as exc:
-                attempts.append(f"sam_3d_body.load_sam_3d_body: {exc}")
+        _redirect_upstream_cuda(self.device)
 
-        # Fallback: the helper documented on the model card, which lives in the
-        # upstream repo's notebook package rather than the installed module.
-        try:
-            from notebook.utils import setup_sam_3d_body
-
-            return setup_sam_3d_body(hf_repo_id=self.hf_repo_id or DEFAULT_HF_REPO_ID)
-        except ImportError as exc:
-            attempts.append(f"notebook.utils.setup_sam_3d_body: {exc}")
-
-        raise ImportError(
-            "Could not load SAM 3D Body. Install it following "
-            "https://github.com/facebookresearch/sam-3d-body/blob/main/INSTALL.md\n"
-            "Tried:\n  " + "\n  ".join(attempts)
-        )
+        # Detector, segmentor and FOV estimator are optional. Without a
+        # detector the model treats the whole frame as one person crop, which
+        # suits single-subject photos; pass explicit bboxes for busier scenes.
+        return SAM3DBodyEstimator(model, model_cfg)
 
     @property
     def estimator(self):

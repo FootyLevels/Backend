@@ -13,12 +13,15 @@ from typing import Dict, List, Optional
 
 from fastapi import BackgroundTasks, FastAPI, File, Form, HTTPException, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi import Response
+from fastapi.responses import FileResponse
 from pydantic import BaseModel
 
 # Add src to path
 sys.path.insert(0, str(Path(__file__).parent.parent / "src"))
 
 from footylevels import SAM3DBodyExtractor, SequenceStorage, SkillCatalog, resolve_device
+from footylevels.reconstruct import ImageReconstructor, ReconstructionError
 
 app = FastAPI(
     title="FootyLevels API",
@@ -40,6 +43,9 @@ app.add_middleware(
 DATA_DIR = Path(__file__).parent.parent / "data"
 REFERENCE_DIR = DATA_DIR / "reference"
 SEQUENCE_DIR = DATA_DIR / "sequences"
+RECONSTRUCTION_DIR = DATA_DIR / "output" / "reconstructions"
+
+IMAGE_CONTENT_TYPES = {"image/jpeg", "image/png", "image/heic", "image/heif", "image/webp"}
 
 # In-memory job table. Extraction runs per frame through an 840M-parameter
 # model, so it is far too slow to answer inline. Swap for Redis or a database
@@ -119,6 +125,32 @@ def get_extractor() -> SAM3DBodyExtractor:
 
 def get_storage() -> SequenceStorage:
     return SequenceStorage(str(SEQUENCE_DIR))
+
+
+_reconstructor: Optional[ImageReconstructor] = None
+
+
+def get_reconstructor() -> ImageReconstructor:
+    """The image reconstructor, sharing the API's single loaded model."""
+    global _reconstructor
+    if _reconstructor is None:
+        _reconstructor = ImageReconstructor(
+            output_dir=str(RECONSTRUCTION_DIR), extractor=get_extractor()
+        )
+    return _reconstructor
+
+
+def _require_model_ready() -> None:
+    """Refuse work with a clear reason when the checkpoint is incomplete."""
+    missing = get_extractor().check_checkpoint()
+    if missing:
+        raise HTTPException(
+            status_code=503,
+            detail=(
+                f"SAM 3D Body checkpoint incomplete. Missing: {', '.join(missing)}. "
+                f"See /api/model/status."
+            ),
+        )
 
 
 def _skill_info(skill: dict, catalog: SkillCatalog) -> SkillInfo:
@@ -241,6 +273,201 @@ async def list_categories():
 async def get_progression():
     """Skill progression by difficulty."""
     return ProgressionInfo(**get_catalog().progression)
+
+
+# -- image reconstruction (the iOS path) ----------------------------------
+
+
+@app.post("/api/reconstruct")
+async def reconstruct_image(
+    image: UploadFile = File(...),
+    y_up: bool = Form(True),
+    preview: bool = Form(True),
+    raw: bool = Form(False),
+):
+    """
+    Reconstruct a 3D body from one photo and return a renderable USDZ.
+
+    This runs inline: a single image is one forward pass, so there is no job to
+    poll. Expect a few seconds on GPU/MPS and longer on CPU — set a generous
+    client timeout.
+
+    The response carries URLs rather than the model bytes, because RealityKit
+    needs a local file: download `model_url`, write it to disk, then hand that
+    file URL to `ModelEntity(contentsOf:)`.
+
+    - **image**: the photo (JPEG, PNG, HEIC, WebP)
+    - **y_up**: convert the camera frame to USD's Y-up convention
+    - **preview**: also render a 2D keypoint overlay for debugging
+    - **raw**: also emit positions/normals as float32 buffers, for clients
+      building a RealityKit MeshDescriptor or LowLevelMesh directly
+    """
+    _require_model_ready()
+
+    if image.content_type and image.content_type not in IMAGE_CONTENT_TYPES:
+        raise HTTPException(
+            status_code=415,
+            detail=f"Unsupported image type: {image.content_type}",
+        )
+
+    temp_dir = Path(tempfile.mkdtemp())
+    suffix = Path(image.filename or "upload.jpg").suffix or ".jpg"
+    upload_path = temp_dir / f"upload_{uuid.uuid4().hex}{suffix}"
+
+    try:
+        with open(upload_path, "wb") as f:
+            shutil.copyfileobj(image.file, f)
+
+        metadata = get_reconstructor().reconstruct(
+            str(upload_path), y_up=y_up, write_preview=preview, write_raw=raw
+        )
+        metadata["source_image"] = image.filename or upload_path.name
+    except ReconstructionError as exc:
+        # The image was fine but yielded nothing to render.
+        raise HTTPException(status_code=422, detail=str(exc))
+    finally:
+        shutil.rmtree(temp_dir, ignore_errors=True)
+
+    return _with_urls(metadata)
+
+
+def _with_urls(metadata: dict) -> dict:
+    """Attach the client-facing download URLs to a reconstruction's metadata."""
+    base = f"/api/reconstruct/{metadata['id']}"
+    enriched = {
+        **metadata,
+        "model_url": f"{base}/model.usdz",
+        "keypoints_url": f"{base}/keypoints",
+        "preview_url": f"{base}/preview.jpg" if metadata.get("has_preview") else None,
+    }
+
+    if metadata.get("raw"):
+        enriched["raw"] = {
+            **metadata["raw"],
+            "positions_url": f"{base}/positions.bin",
+            "normals_url": f"{base}/normals.bin",
+            # Topology is shared by every reconstruction, so it is not per-id.
+            "indices_url": "/api/topology",
+        }
+    return enriched
+
+
+def _raw_buffer_response(reconstruction_id: str, filename: str):
+    """Serve one raw vertex buffer as octet-stream."""
+    path = get_reconstructor().bundle_dir(reconstruction_id) / filename
+    if not path.exists():
+        raise HTTPException(
+            status_code=404,
+            detail=(
+                f"No {filename} for {reconstruction_id}. "
+                f"Reconstruct with raw=true to generate it."
+            ),
+        )
+    return FileResponse(str(path), media_type="application/octet-stream")
+
+
+@app.get("/api/topology")
+async def get_topology(response: Response):
+    """The MHR triangle indices, as a flat little-endian uint32 buffer.
+
+    Identical for every reconstruction — the model's vertex count and
+    connectivity never change — so a client should fetch this once and cache
+    it, then download only positions per photo. That is the entire reason the
+    raw path is smaller than USDZ: topology is ~432 KB and would otherwise be
+    re-sent every time.
+
+    Served with a long max-age and a strong ETag so revalidation is cheap.
+    """
+    _require_model_ready()
+
+    faces = get_extractor().faces
+    if faces is None:
+        raise HTTPException(status_code=503, detail="Model exposed no topology")
+
+    import hashlib
+
+    import numpy as np
+
+    payload = np.ascontiguousarray(faces, dtype="<u4").tobytes()
+    etag = hashlib.sha256(payload).hexdigest()[:32]
+
+    response.headers["Cache-Control"] = "public, max-age=31536000, immutable"
+    response.headers["ETag"] = f'"{etag}"'
+    response.headers["X-Triangle-Count"] = str(len(faces))
+    response.headers["X-Index-Dtype"] = "uint32-le"
+    return Response(
+        content=payload,
+        media_type="application/octet-stream",
+        headers=dict(response.headers),
+    )
+
+
+@app.get("/api/reconstruct/{reconstruction_id}/positions.bin")
+async def get_positions(reconstruction_id: str):
+    """Vertex positions: float32 xyz interleaved, little-endian, metres."""
+    return _raw_buffer_response(reconstruction_id, "positions.bin")
+
+
+@app.get("/api/reconstruct/{reconstruction_id}/normals.bin")
+async def get_normals(reconstruction_id: str):
+    """Smooth vertex normals: float32 xyz interleaved, little-endian."""
+    return _raw_buffer_response(reconstruction_id, "normals.bin")
+
+
+@app.get("/api/reconstruct/{reconstruction_id}/model.usdz")
+async def get_reconstruction_model(reconstruction_id: str):
+    """Download the USDZ. Feed this to RealityKit's ModelEntity(contentsOf:)."""
+    reconstructor = get_reconstructor()
+    path = reconstructor.bundle_dir(reconstruction_id) / "model.usdz"
+    if not path.exists():
+        raise HTTPException(status_code=404, detail=f"Not found: {reconstruction_id}")
+
+    return FileResponse(
+        str(path),
+        media_type="model/vnd.usdz+zip",
+        filename=f"{reconstruction_id}.usdz",
+    )
+
+
+@app.get("/api/reconstruct/{reconstruction_id}/keypoints")
+async def get_reconstruction_keypoints(reconstruction_id: str):
+    """The subject's 3D and 2D joints — a few KB, versus ~0.7 MB for the mesh."""
+    path = get_reconstructor().bundle_dir(reconstruction_id) / "keypoints.json"
+    if not path.exists():
+        raise HTTPException(status_code=404, detail=f"Not found: {reconstruction_id}")
+    return FileResponse(str(path), media_type="application/json")
+
+
+@app.get("/api/reconstruct/{reconstruction_id}/preview.jpg")
+async def get_reconstruction_preview(reconstruction_id: str):
+    """The 2D keypoint overlay, for checking the model latched onto the player."""
+    path = get_reconstructor().bundle_dir(reconstruction_id) / "preview.jpg"
+    if not path.exists():
+        raise HTTPException(status_code=404, detail=f"Not found: {reconstruction_id}")
+    return FileResponse(str(path), media_type="image/jpeg")
+
+
+@app.get("/api/reconstruct/{reconstruction_id}")
+async def get_reconstruction(reconstruction_id: str):
+    """One reconstruction's metadata."""
+    try:
+        return _with_urls(get_reconstructor().load_metadata(reconstruction_id))
+    except FileNotFoundError:
+        raise HTTPException(status_code=404, detail=f"Not found: {reconstruction_id}")
+
+
+@app.get("/api/reconstructions")
+async def list_reconstructions():
+    """Every stored reconstruction, newest first."""
+    return [_with_urls(m) for m in get_reconstructor().list_reconstructions()]
+
+
+@app.delete("/api/reconstruct/{reconstruction_id}")
+async def delete_reconstruction(reconstruction_id: str):
+    """Delete a reconstruction bundle."""
+    if not get_reconstructor().delete(reconstruction_id):
+        raise HTTPException(status_code=404, detail=f"Not found: {reconstruction_id}")
+    return {"deleted": reconstruction_id}
 
 
 # -- extraction -----------------------------------------------------------

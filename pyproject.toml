@@ -17,6 +17,7 @@ dependencies = [
     "pyyaml>=6.0",
     "pydantic>=2.0.0",
     "matplotlib>=3.7.0",
+    "usd-core>=25.0",
 ]
 
 [project.optional-dependencies]
