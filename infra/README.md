@@ -4,11 +4,11 @@ Current requirement: **free services only, no budget, no billing linkage or Blaz
 
 | Setup | Location | Status |
 | --- | --- | --- |
-| Firebase social login | Spark projects | Configure/reuse Google sign-in in FP-14 |
+| Firebase social login | Spark projects | Google provider enabled in both; app migration/login test in FP-14 |
 | Firestore application records | Spark, Montreal | One protected default database per environment |
 | API | Kunal's Mac, local testing | Selected by Kunal; deployment hosting deferred |
 | CPU media worker | Local testing first; DGX role planned | Packaging/integration pending |
-| 3D generation | On-premises DGX | Access allowed; runtime/credential method needs validation |
+| 3D generation | On-premises DGX | SSH/GPU access verified; missing DNS configuration blocks normal cloud access |
 | Private videos and generated assets | Supabase Free, Canada Central | Both environments' buckets created and verified. See [storage guide](supabase/README.md) |
 | Durable job dispatch | Local testing contract pending implementation | Pub/Sub/Tasks deferred |
 
@@ -43,7 +43,10 @@ Last semester's `footylevels-de8aa`, referenced by the iOS app, remains unchange
 Both Spark configurations have been applied: Firebase enabled, protected default
 Firestore database in Montreal (`northamerica-northeast1`), deny-all direct client
 rules deployed, and the existing iOS bundle registered separately. Google sign-in
-providers are still pending; enabling the Auth API does not complete sign-in setup.
+is enabled in both consoles, with environment-specific public project names and the
+Kunal-approved support contact. No Identity Platform or billing upgrade was made.
+The existing Frontend still uses its legacy Firebase configuration; migration and a
+real app login test remain FP-14 work.
 
 | Environment | Registered iOS app ID |
 | --- | --- |
@@ -104,8 +107,10 @@ a deliberate migration. Saved plans can contain sensitive state and remain local
 
 ## Firebase login and free quotas
 
-In each Firebase project's Authentication page, enable the existing Google sign-in
-method. Terraform has registered the existing iOS bundle `ca.sheridan.FootyLevels-Frontend`
+Both Firebase projects' Google sign-in providers were enabled manually in the console.
+On reprovisioning, enable that provider on Spark and select the owner's approved support
+contact; do not assume permission to publish another address. Terraform has registered
+the existing iOS bundle `ca.sheridan.FootyLevels-Frontend`
 in each project; do not create duplicates.
 Use that project's matching iOS configuration when FP-14/16 implements environment
 selection. Google OAuth setup needs the account-specific clients/consent configuration;
@@ -124,8 +129,13 @@ database is for metadata, never video/model blobs or downloadable private media 
 
 ## DGX and the remaining hosting decision
 
-Kunal confirmed that outbound Google Cloud HTTPS is allowed; actual access is untested.
-FP-52 will check the allocation, scheduler, GPU/runtime and approved credential method.
+Kunal supplied the DGX SSH connection, which succeeded with host-key checking enabled.
+The node reports four A100 80 GB compute GPUs plus a display GPU. Direct HTTPS to
+Google and Supabase succeeded with certificate validation, but ordinary hostname
+requests fail: the active system resolver has no upstream DNS servers configured.
+See [DGX access evidence](dgx/README.md). This needs a Sheridan-approved network repair
+before normal cloud integration can be verified. No shared network settings were changed.
+FP-52 will check the allocation, scheduler, isolated GPU/runtime and worker identity.
 Do not expose a public DGX endpoint or place personal cloud credentials on a shared node.
 The deferred guide documents outbound endpoint/WIF requirements for the original plan.
 
