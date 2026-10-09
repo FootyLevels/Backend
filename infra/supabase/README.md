@@ -12,8 +12,8 @@ Quota accounting is organization-based for applicable usage items; two projects 
 not imply twice the organization's included storage/transfer. Use separate dev and
 demo projects in the intended Free organization. Do not select Pro, add paid features,
 attach payment details or exceed the available free-project allowance. The current
-organization already lists three unrelated projects; their existence does not prove
-free active capacity is available. If creation reports a limit, stop and reconcile it
+organization also has three unrelated paused projects, left unchanged. Both FootyLevels
+projects were created successfully. If future creation reports a limit, stop and reconcile it
 with Kunal without pausing or deleting another project.
 
 Keep a small set of short, permitted demo videos and generated assets. SAM weights
@@ -24,19 +24,19 @@ rules. Quota/paused failures must appear honestly in the app.
 
 The GCP Firestore location is Montreal; Supabase region availability is independent.
 The new-project form offers Canada (Central), `ca-central-1`, and that specific region
-is verified on the created development project. Confirm any institutional residency rule.
+is verified on both created projects. Confirm any institutional residency rule.
 
 ## Deployment record — 9 October 2026
 
 | Environment | Project reference | URL | Region | Status |
 | --- | --- | --- | --- | --- |
 | Development | `bwzxrvkxfubnmuieljoj` | `https://bwzxrvkxfubnmuieljoj.supabase.co` | `ca-central-1` | Healthy; both private buckets verified |
-| Demo | Pending | Pending | Canada Central intended | Not created yet |
+| Demo | `skzgjwbkadiazfvuhtts` | `https://skzgjwbkadiazfvuhtts.supabase.co` | `ca-central-1` | Healthy; both private buckets verified |
 
-Development was created in `bajajku's Org` with the Free plan selected. The user set
-the database password privately. `buckets.sql` succeeded: both rows have `public = false`
-and `file_size_limit = 52428800`. Live verification found `storage.objects` RLS enabled
-and zero client object policies. This proves initial bucket configuration, not the
+Both projects were created in `bajajku's Org` with the Free plan selected. The user set
+the database passwords privately. `buckets.sql` succeeded in both: both rows have
+`public = false` and `file_size_limit = 52428800`. Live verification in both found
+`storage.objects` RLS enabled and zero client object policies. This proves initial bucket configuration, not the
 future Firebase ownership checks or an end-to-end upload/reconstruction.
 
 ## Setup
@@ -44,8 +44,8 @@ future Firebase ownership checks or an end-to-end upload/reconstruction.
 1. Sign into Supabase yourself and review any account terms/permission prompt.
 2. Choose a Free organization, then create `FootyLevels Development` and
    `FootyLevels Demo`. Set each project's database password yourself, without
-   sending it through chat/Jira. Store it in your password manager. Development is
-   created; demo setup depends on available free capacity. This database
+   sending it through chat/Jira. Store it in your password manager. Both projects
+   are created. This database
    is incidental to Supabase Storage; Firestore remains the application database.
 3. In each project's SQL editor, run [buckets.sql](buckets.sql), then verify both
    bucket rows have `public = false` and `file_size_limit = 52428800`.
@@ -82,6 +82,7 @@ For larger clips, Supabase recommends [TUS resumable uploads](https://supabase.c
 above 6 MB. FP-16 must adapt the current upload contract to the chosen provider; an
 existing GCS session URL is not compatible with TUS. The overall 50 MB limit still applies.
 
-Storage alone does not host the Python API or CPU processing. Their free hosting and
-durable DGX dispatch remain separate decisions in FP-50/52/53/54/55. No live upload
+Storage alone does not host the Python API or CPU processing. Kunal selected local API
+testing on his Mac for now, with deployment hosting explicitly deferred. Durable DGX
+dispatch remains implementation work in FP-52/53/54/55. No live upload
 or reconstruction is implied by creation of a bucket.

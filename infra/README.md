@@ -6,10 +6,11 @@ Current requirement: **free services only, no budget, no billing linkage or Blaz
 | --- | --- | --- |
 | Firebase social login | Spark projects | Configure/reuse Google sign-in in FP-14 |
 | Firestore application records | Spark, Montreal | One protected default database per environment |
-| API and CPU media worker | Local machine/institution-provided host | Cloud Run deferred |
+| API | Kunal's Mac, local testing | Selected by Kunal; deployment hosting deferred |
+| CPU media worker | Local testing first; DGX role planned | Packaging/integration pending |
 | 3D generation | On-premises DGX | Access allowed; runtime/credential method needs validation |
-| Private videos and generated assets | Supabase Free, Canada Central | Development buckets created and verified; demo pending. See [storage guide](supabase/README.md) |
-| Durable job dispatch | Hosting decision pending | Pub/Sub/Tasks deferred |
+| Private videos and generated assets | Supabase Free, Canada Central | Both environments' buckets created and verified. See [storage guide](supabase/README.md) |
+| Durable job dispatch | Local testing contract pending implementation | Pub/Sub/Tasks deferred |
 
 The full cloud design cannot be run on Firebase Spark: Cloud Run and Pub/Sub require
 billing, and current Cloud Storage for Firebase also requires Blaze.
@@ -130,15 +131,23 @@ The deferred guide documents outbound endpoint/WIF requirements for the original
 
 Kunal selected [Supabase Free](supabase/README.md) for private video/model files.
 Its 1 GB storage quota and 50 MB per-file limit require bounded demo clips and chunks.
-Development's `private-media` and `reference-assets` buckets are verified private,
+Both environments' `private-media` and `reference-assets` buckets are verified private,
 limited to 52,428,800 bytes, with object RLS enabled and no client object policies.
-The demo environment and application adapter still need setup/verification.
-It does not host the Python API or CPU processing. A free API/CPU host and a permitted
-way for the phone to reach it remain undecided. Reuse repository interfaces with the
+The application adapter still needs implementation and end-to-end verification.
+It does not host the Python API or CPU processing. Kunal selected local API testing
+on his Mac for now and explicitly deferred choosing a deployment host. Do not create
+a Render service or another external API deployment. Reuse repository interfaces with the
 Supabase asset adapter in FP-17 and a durable dispatch implementation. Firestore-backed jobs may replace Pub/Sub
 for a small deployment, with bounded polling and transactional leases, if that design
 is chosen. This alternative has not been implemented or approved as the final hosting
 architecture. Existing local playback can continue while that decision is settled.
+
+For the simulator, use the local API address documented in the application's setup.
+A physical iPhone needs the Mac's LAN address on the same permitted network;
+`localhost` on the phone refers to the phone. Keep any development login bypass
+limited to debug builds. Local user ADC is for development only and must not be
+copied to DGX or committed. New Firestore/Supabase environment names do not make the
+existing API use those providers; that integration belongs to the implementation tickets.
 
 FP-50 remains In Progress until its actual free resources, Authentication and access
 evidence are recorded. The original full-cloud acceptance and later hosting tickets
