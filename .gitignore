@@ -24,3 +24,23 @@ data/output/
 
 # Test cache
 .pytest_cache/
+
+# Local cloud configuration, credentials and infrastructure state
+.env
+.env.*
+!.env.example
+infra/.terraform/
+infra/*.tfstate*
+infra/*.tfplan
+infra/*.tfplan.json
+infra/*.tfvars
+infra/*.backend.hcl
+infra/crash.log
+infra/credentials/
+infra/**/.terraform/
+infra/**/*.tfstate*
+infra/**/*.tfplan*
+infra/**/*.tfvars
+infra/**/*.backend.hcl
+infra/**/crash*.log
+infra/**/credentials/

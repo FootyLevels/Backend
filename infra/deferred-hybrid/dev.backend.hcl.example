@@ -1,0 +1,2 @@
+bucket = "footylevels-dev-20261009-terraform-state"
+prefix = "footylevels/dev"

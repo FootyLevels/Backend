@@ -1,0 +1,7 @@
+project_id  = "footylevels-dev-20261009"
+environment = "dev"
+region      = "northamerica-northeast1"
+# No application containers deploy until reviewed images are supplied.
+api_image         = ""
+media_image       = ""
+enable_public_api = false

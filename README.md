@@ -23,6 +23,10 @@ forward pass per frame. There is no temporal smoothing and no tracking.
 
 ## Setup
 
+Cloud/DGX infrastructure setup for FP-50 is documented in [infra/README.md](infra/README.md).
+It configures the free Firebase/Firestore foundation and Supabase storage separately from this local reconstruction runtime;
+the current API does not yet consume those cloud settings.
+
 ### 1. Python environment
 
 Upstream targets **Python 3.11**.
