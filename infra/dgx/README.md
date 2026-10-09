@@ -27,10 +27,10 @@ validation. Both returned an HTTP 404 for `/`. This verifies those outbound TLS 
 it does not verify authenticated Firestore access or Supabase upload/download permissions.
 The temporary addresses are not a runtime configuration and were not installed on DGX.
 
-Sheridan-approved DNS settings and an authorized administrator are required to repair
-the shared resolver. No system DNS, proxy, routing, firewall or certificate settings
-were modified. After repair, rerun ordinary hostname-based checks from the intended
-worker environment; direct-IP success alone cannot close the network acceptance check.
+This was the initial host-environment diagnosis. The application-scoped solution
+verified below now enables ordinary hostname-based HTTPS requests without repairing
+the shared resolver. An administrator is still needed for any shared resolver repair.
+No system DNS, proxy, routing, firewall or certificate settings were modified.
 
 ## Read-only follow-up checks
 
@@ -48,18 +48,70 @@ Use the institution's allocation/scheduler policy for runtime work. Seeing GPUs 
 `nvidia-smi` is not proof that a particular job has an allocation or a working PyTorch
 CUDA installation. FP-52 must validate the isolated runtime before inference.
 
-## Worker access contract
+## Cloud credentials and application integration
 
-Keep Google administration ADC on the Mac. Keep the Supabase server secret with the
-trusted API. Do not copy either onto a shared DGX node. The worker will authenticate
-to scoped API worker endpoints and receive only the leased job's temporary input/output
-asset capabilities, with refresh and expiry handled by the API. Worker identity,
-ownership/lease checks and the asset adapter are FP-14/17/52/53 implementation work;
-no live worker credential or cloud data permission is claimed here.
+Keep Google administration ADC on the Mac. The earlier separate-worker design used
+scoped API worker endpoints and per-job asset capabilities. Kunal has since proposed
+one DGX backend that hosts the API and background generation together. In that design,
+the trusted API needs its own scoped Firestore runtime identity and private Supabase
+server configuration; administration ADC and VAC credentials must not be reused.
+Authentication, ownership checks, durable jobs and the storage adapter still belong
+to the implementation tickets. No live FootyLevels cloud credential or authenticated
+data permission is claimed by the connectivity checks here.
 
-The API is local on the Mac for now. `localhost` on DGX cannot reach it. An approved
-route between the local API and worker still needs integration validation; DNS repair
-alone does not provide that route. No public DGX/API endpoint was created.
+The existing DGX API compatibility path below is available for local tests through
+the Mac. A public ngrok endpoint for FootyLevels has not been created. The proposed
+monolith and Firebase/Supabase integration have not been deployed by this work.
+
+## Why VAC works and the verified DNS launcher
+
+Read-only inspection of VAC on 9 October found its API and ngrok in private **user
+and mount namespaces**, with the normal host network namespace retained. Their view
+of `/etc/resolv.conf` contains Sheridan's resolvers `142.55.100.25`, `142.55.44.25`
+and `142.55.136.25`. The ordinary SSH shell sees the broken `127.0.0.53` stub instead.
+VAC's `scripts/with_network_dns.sh` creates this environment with `unshare` and a bind
+mount. Its ngrok configuration also names those resolvers explicitly. The API has
+established MongoDB Atlas connections; a fresh database `ping` through the same wrapper
+also succeeded using VAC's own configured runtime. The ping wrote no database data.
+No VAC process or configuration was changed, and no credential was copied.
+
+All three resolvers answered queries from the FootyLevels DGX for ngrok, Firestore,
+Firebase signing keys and both Supabase hosts. The equivalent versioned launcher is
+[with_network_dns.sh](with_network_dns.sh), with network-specific settings in
+[resolv.conf.example](resolv.conf.example). It explicitly makes mount propagation
+private and snapshots the configuration into a temporary directory. It uses no sudo
+and fails if namespace creation or the bind mount fails; it never falls back to editing
+the system resolver. UID 0 inside its user namespace is mapped to the caller's host
+UID, not host administrator access.
+
+Run a command from a Linux DGX checkout:
+
+```sh
+bash infra/dgx/with_network_dns.sh python3 -c \
+  'import socket; print(bool(socket.getaddrinfo("firestore.googleapis.com", 443)))'
+```
+
+For another approved resolver file, set `FOOTYLEVELS_RESOLV_CONF` to its path. Start
+the intended API/runtime through the same wrapper so its child processes inherit
+the resolver view. Wrapping a separate check does not change an already-running API.
+The helper and example were installed under Kunal's DGX account at
+`~/.local/share/footylevels/fp50-dns/`; the existing API was not restarted.
+
+Live verification inside the wrapper used normal URLs and default TLS certificate
+validation, with no credentials or manual destination IPs:
+
+| Service | HTTP result | Evidence |
+| --- | --- | --- |
+| Firestore root | 404 | DNS and HTTPS reached Google |
+| Firebase public signing keys | 200 | Public key endpoint reachable |
+| Development Supabase bucket route | 400 | DNS and HTTPS reached Supabase; unauthenticated request |
+| Demo Supabase bucket route | 400 | DNS and HTTPS reached Supabase; unauthenticated request |
+
+The command ran in a different mount namespace; the host resolver's checksum was
+identical before and after. Ordinary host-shell DNS remained broken, confirming the
+configuration was confined to the launched command. These checks resolve the
+hostname/TLS connectivity blocker for this launch method. Authenticated Firestore
+reads/writes, Supabase upload/download and fresh model generation remain unverified.
 
 ## Existing frontend compatibility path
 
@@ -88,10 +140,11 @@ physical iPhone cannot reach this loopback address; its connection requires a
 separately verified, permitted route. This tunnel does not expose a public service
 or change DGX firewall/network settings.
 
-This confirms the existing API can serve project data to the Mac despite the
-DGX DNS problem. It does not validate a fresh generation job, an app UI session,
+This confirms the existing API can serve project data to the Mac. It does not
+validate a fresh generation job, an app UI session,
 the separate legacy image reconstruction client, or the new Firebase/Supabase
 integration. New worker architecture and deployment choices remain deferred to
 their implementation tickets.
 
-Reference: [NVIDIA monitoring options](https://docs.nvidia.com/deploy/nvidia-smi/index.html).
+References: [NVIDIA monitoring options](https://docs.nvidia.com/deploy/nvidia-smi/index.html),
+[Linux unshare namespaces](https://man7.org/linux/man-pages/man1/unshare.1.html).

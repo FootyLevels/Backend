@@ -6,9 +6,9 @@ Current requirement: **free services only, no budget, no billing linkage or Blaz
 | --- | --- | --- |
 | Firebase social login | Spark projects | Google provider enabled in both; app migration/login test in FP-14 |
 | Firestore application records | Spark, Montreal | One protected default database per environment |
-| API | Kunal's Mac, local testing | Selected by Kunal; deployment hosting deferred |
+| API | Mac testing via existing DGX API; one DGX monolith proposed | SSH tunnel verified; public ngrok deployment and cloud adapters pending |
 | CPU media worker | Local testing first; DGX role planned | Packaging/integration pending |
-| 3D generation | On-premises DGX | SSH/GPU access verified; missing DNS configuration blocks normal cloud access |
+| 3D generation | On-premises DGX | SSH/GPU access verified; application-scoped DNS launcher verifies cloud HTTPS access |
 | Private videos and generated assets | Supabase Free, Canada Central | Both environments' buckets created and verified. See [storage guide](supabase/README.md) |
 | Durable job dispatch | Local testing contract pending implementation | Pub/Sub/Tasks deferred |
 
@@ -127,16 +127,19 @@ Server SDKs bypass Firebase client rules. Keep API ownership/authorization enfor
 in FP-14; deny-all client rules alone are not proof of a secure application. The free
 database is for metadata, never video/model blobs or downloadable private media links.
 
-## DGX and the remaining hosting decision
+## DGX connectivity and proposed hosting
 
 Kunal supplied the DGX SSH connection, which succeeded with host-key checking enabled.
-The node reports four A100 80 GB compute GPUs plus a display GPU. Direct HTTPS to
-Google and Supabase succeeded with certificate validation, but ordinary hostname
-requests fail: the active system resolver has no upstream DNS servers configured.
-See [DGX access evidence](dgx/README.md). This needs a Sheridan-approved network repair
-before normal cloud integration can be verified. No shared network settings were changed.
+The node reports four A100 80 GB compute GPUs plus a display GPU. The host shell's
+resolver is missing upstream DNS configuration. Inspection of Kunal's working VAC
+deployment identified its private application resolver environment, which was replicated
+and verified on FootyLevels. Normal Google/Supabase HTTPS requests now work when
+launched through [the isolated DNS wrapper](dgx/README.md), with certificate validation
+and unchanged shared network settings. This does not grant authenticated data access.
 FP-52 will check the allocation, scheduler, isolated GPU/runtime and worker identity.
-Do not expose a public DGX endpoint or place personal cloud credentials on a shared node.
+A public ngrok endpoint for the proposed DGX API has not been created. Personal Google
+administration credentials must stay on the Mac; a trusted API needs scoped runtime
+credentials and protected server configuration before cloud data integration.
 The deferred guide documents outbound endpoint/WIF requirements for the original plan.
 
 Kunal selected [Supabase Free](supabase/README.md) for private video/model files.
@@ -144,13 +147,14 @@ Its 1 GB storage quota and 50 MB per-file limit require bounded demo clips and c
 Both environments' `private-media` and `reference-assets` buckets are verified private,
 limited to 52,428,800 bytes, with object RLS enabled and no client object policies.
 The application adapter still needs implementation and end-to-end verification.
-It does not host the Python API or CPU processing. Kunal selected local API testing
-on his Mac for now and explicitly deferred choosing a deployment host. Do not create
-a Render service or another external API deployment. Reuse repository interfaces with the
-Supabase asset adapter in FP-17 and a durable dispatch implementation. Firestore-backed jobs may replace Pub/Sub
-for a small deployment, with bounded polling and transactional leases, if that design
-is chosen. This alternative has not been implemented or approved as the final hosting
-architecture. Existing local playback can continue while that decision is settled.
+It does not host the Python API or CPU processing. Following the initial local-testing
+decision, Kunal proposed one monolithic DGX API with background model processing and
+an ngrok HTTPS endpoint. The app would read job metadata and render downloaded assets.
+This proposed deployment is not yet implemented; no Render service or new paid host
+is selected. Reuse the existing pipeline and interfaces with the Supabase asset adapter
+in FP-17 and durable Firestore job records. Generation should return a job ID and run
+in the background, with bounded GPU concurrency. New direct app reads of Firestore
+require per-user read rules; current foundation rules deny all direct client access.
 
 For the simulator, use the local API address documented in the application's setup.
 A physical iPhone needs the Mac's LAN address on the same permitted network;
