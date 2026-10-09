@@ -58,9 +58,18 @@ future Firebase ownership checks or an end-to-end upload/reconstruction.
 
 The two buckets are:
 
-- `private-media`: source clips, previews, GLB keyframes, manifest, topology and
+- `private-media`: source photos/clips, previews, existing USDZ models, GLB keyframes, manifest, topology and
   compressed motion chunks at `users/{uid}/projects/{projectId}/...`.
 - `reference-assets`: licensed small example assets at `examples/{referenceId}/{version}/...`.
+
+Reuse the current reconstruction bundle first: `model.usdz` (`model/vnd.usdz+zip`),
+`keypoints.json`, `metadata.json` and `preview.jpg`. The optional `positions.bin` and
+`normals.bin`, shared topology and stored `.npz` sequences use `application/octet-stream`.
+The bucket MIME restrictions also allow the API's JPEG, PNG, HEIC, HEIF and WebP input
+types, and MP4/QuickTime reference clips. GLB and compressed motion files are allowed
+for later playback integration; their inclusion does not mean the current image
+reconstructor generates them. Server validation of actual file content still belongs
+to FP-17/54; a supplied MIME header alone is not validation.
 
 ## Runtime access contract for FP-17
 

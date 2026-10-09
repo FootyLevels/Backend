@@ -7,11 +7,14 @@ insert into storage.buckets (id, name, public, file_size_limit, allowed_mime_typ
 values
   ('private-media', 'private-media', false, 52428800,
    array['video/mp4', 'video/quicktime', 'image/jpeg', 'image/png',
+         'image/heic', 'image/heif', 'image/webp',
          'application/json', 'application/octet-stream', 'application/gzip',
-         'model/gltf-binary']),
+         'model/vnd.usdz+zip', 'model/gltf-binary']),
   ('reference-assets', 'reference-assets', false, 52428800,
-   array['image/jpeg', 'image/png', 'application/json',
-         'application/octet-stream', 'application/gzip', 'model/gltf-binary'])
+   array['video/mp4', 'video/quicktime', 'image/jpeg', 'image/png',
+         'image/heic', 'image/heif', 'image/webp', 'application/json',
+         'application/octet-stream', 'application/gzip',
+         'model/vnd.usdz+zip', 'model/gltf-binary'])
 on conflict (id) do update
 set public = excluded.public,
     file_size_limit = excluded.file_size_limit,
