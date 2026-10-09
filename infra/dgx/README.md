@@ -61,4 +61,37 @@ The API is local on the Mac for now. `localhost` on DGX cannot reach it. An appr
 route between the local API and worker still needs integration validation; DNS repair
 alone does not provide that route. No public DGX/API endpoint was created.
 
+## Existing frontend compatibility path
+
+A later read-only check on 9 October found the existing **Skill Lab** API listening
+on DGX loopback port `8010`. Its `/api/health` response reports status `ok`, local
+CUDA ready and motion ready. This service uses a different runtime from the default
+Python interpreter inspected above. These readiness flags do not prove a fresh
+inference run. Port `8000` belongs to a different service; the Skill Lab health
+response currently advertises that port, so its advertised URL must not be used
+to configure this frontend connection.
+
+The frontend's `SkillLabClient` uses `/api/health` and `/api/projects` and lets the
+user save a server address in its server settings. An SSH tunnel from the Mac was
+verified with HTTP 200 for both routes and a list of three projects:
+
+```sh
+ssh -N -o BatchMode=yes -o StrictHostKeyChecking=yes \
+  -o ExitOnForwardFailure=yes -o ServerAliveInterval=30 \
+  -L 127.0.0.1:18010:127.0.0.1:8010 USER@DGX_HOST
+```
+
+Use the institution-provided host and account in place of the placeholders. While
+the tunnel runs, set the **simulator's** server address to
+`http://127.0.0.1:18010`. The simulator reaches the Mac's loopback listener. A
+physical iPhone cannot reach this loopback address; its connection requires a
+separately verified, permitted route. This tunnel does not expose a public service
+or change DGX firewall/network settings.
+
+This confirms the existing API can serve project data to the Mac despite the
+DGX DNS problem. It does not validate a fresh generation job, an app UI session,
+the separate legacy image reconstruction client, or the new Firebase/Supabase
+integration. New worker architecture and deployment choices remain deferred to
+their implementation tickets.
+
 Reference: [NVIDIA monitoring options](https://docs.nvidia.com/deploy/nvidia-smi/index.html).
