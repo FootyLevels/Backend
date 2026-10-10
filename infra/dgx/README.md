@@ -1,5 +1,9 @@
 # DGX access evidence for FP-50
 
+Fresh body and motion inference was subsequently validated through the authorized
+shared runtime in FP-52. See [runtime validation and limits](runtime.md); the
+earlier observations below describe the initial access checks.
+
 Checked 9 October 2026 using the SSH connection Kunal supplied. SSH authenticated
 successfully with `BatchMode=yes` and `StrictHostKeyChecking=yes`. The actual host,
 username and credentials are intentionally outside this shared source record.
@@ -115,7 +119,8 @@ The command ran in a different mount namespace; the host resolver's checksum was
 identical before and after. Ordinary host-shell DNS remained broken, confirming the
 configuration was confined to the launched command. These checks resolve the
 hostname/TLS connectivity blocker for this launch method. The later [runtime access probe](runtime-access.md) verified authenticated Firestore
-and Supabase round trips and cleanup. Fresh model generation remains unverified.
+and Supabase round trips and cleanup. Fresh model generation was later verified
+in [FP-52](runtime.md).
 
 ## Existing frontend compatibility path
 
