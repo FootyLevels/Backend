@@ -117,6 +117,7 @@ class ReconstructionRecord(Record):
     project_id: Id
     job_id: Id
     input_revision: int = Field(ge=1)
+    profile_version: str = Field(min_length=1, max_length=80)
     source_asset: AssetRef
     mode: Literal["keyframes", "motion"]
     outcome: Literal["ready", "partial"]

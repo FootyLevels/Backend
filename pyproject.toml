@@ -22,6 +22,7 @@ dependencies = [
 
 [project.optional-dependencies]
 dev = ["pytest>=7.4.0"]
+cloud = ["google-cloud-firestore==2.34.0"]
 
 [project.scripts]
 footylevels-demo = "scripts.demo:main"
