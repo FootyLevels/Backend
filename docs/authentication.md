@@ -3,8 +3,9 @@
 `api.cloud` is the new application entry point. It uses FP-51 records and does not
 mount the older `api.main` local image/sequence routes or the shared Skill Lab
 file server. The public DGX compatibility service remains unchanged during this
-implementation. The frontend still uses that legacy service; its migration and
-real-device session checks are pending, so FP-14 remains in progress.
+implementation. Debug frontend testing still uses that legacy service. The new authenticated
+transport is verified locally; model/upload UI migration, private asset capability
+checks and physical-device release checks are pending.
 
 From a Backend checkout with the package and cloud dependencies installed:
 
@@ -66,8 +67,8 @@ PYTHONPATH=src python -m scripts.verify_firebase_access
 ```
 
 Live auth checks have Development opt-in guards. Do not run test account mutations
-against Demo. Remaining ticket evidence includes iOS sign-in/logout/account
-switching and private asset URL denial when storage signing is attached.
+against Demo. Private asset URL ownership checks are required when FP-17 attaches
+storage signing; no legacy asset routes are mounted on this API.
 
 On 10 October the probe passed two-account project read/list/rename/delete
 isolation, repeated bootstrap, real revocation and real disabled-account rejection,
@@ -82,3 +83,14 @@ using an explicit two-field update mask (`signIn.email.enabled` and
 replacement was requested. This provider setting is outside the current Terraform
 resources, like the previously configured Google provider. Runtime account-state
 permissions are managed by Terraform in both environments.
+
+## iOS checkpoint
+
+The simulator's real Firebase SDK passed two-account profile/project ownership,
+repeated bootstrap, sign-in/sign-out and switching on 10 October. Both test Auth
+accounts and exact Firestore records were removed and absence verified. The
+client refreshes a 401 once, rejects redirects/foreign destinations and discards
+responses from old account generations. Debug retains the requested bundled
+example entry and team service; Release blocks the unauthenticated legacy service
+until the owned upload/model migration. See the Frontend `docs/authentication.md`
+for configuration and opt-in SDK test instructions.
