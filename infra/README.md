@@ -4,11 +4,11 @@ Current requirement: **free services only, no budget, no billing linkage or Blaz
 
 | Setup | Location | Status |
 | --- | --- | --- |
-| Firebase social login | Spark projects | Google provider enabled in both; app migration/login test in FP-14 |
+| Firebase social login | Spark projects | Google/email enabled in both; real iOS email/ownership checks pass; Google device check pending |
 | Firestore application records | Spark, Montreal | One protected default database per environment |
 | API | Existing DGX service through ngrok; modular DGX monolith selected | Public health/project reads verified; cloud adapters pending |
 | Media preparation | Background work in the DGX deployment | Packaging/integration pending |
-| 3D generation | On-premises DGX | SSH/GPU access verified; application-scoped DNS launcher verifies cloud HTTPS access |
+| 3D generation | On-premises DGX | Shared team body runtime verified (FP-52); optional ball stage reported GPU OOM |
 | Private videos and generated assets | Supabase Free, Canada Central | Both environments' buckets created and verified. See [storage guide](supabase/README.md) |
 | Durable job dispatch | Firestore job records claimed by DGX background runner | Implementation pending; Pub/Sub/Tasks deferred |
 
@@ -25,9 +25,11 @@ Identity Platform upgrade, billing-account resource, PITR, backups or TTL policy
 `deferred-hybrid/` preserves the full design for future funding; a false-by-default
 acknowledgment variable blocks its plan/apply. Do not opt into it without new authorization.
 
-The existing iOS app and local reconstruction code are preserved. Neither has been
-connected to these new projects yet. Environment outputs define a contract for future
-adapters; they do not implement FP-51, API authentication or a live DGX worker.
+The iOS app now selects Development for Debug and Demo for Release. FP-51 records
+and FP-14 authenticated API/session transport are implemented and verified locally
+against real Development Firebase/Firestore. The deployed shared model service has
+not yet moved to these adapters; private storage, owned uploads and durable model
+job integration remain separate tickets.
 
 ## Projects and state
 
@@ -39,14 +41,16 @@ Created and verified in the Google Cloud console on 9 October 2026:
 | Demo | `footylevels-demo-20261009` | `554230919588` |
 
 Both are under No organization. CLI checks confirm `billingEnabled: false` in both.
-Last semester's `footylevels-de8aa`, referenced by the iOS app, remains unchanged.
+Last semester's `footylevels-de8aa` cloud project remains unchanged; its client
+configuration is preserved outside the app's bundled resources.
 Both Spark configurations have been applied: Firebase enabled, protected default
 Firestore database in Montreal (`northamerica-northeast1`), deny-all direct client
 rules deployed, and the existing iOS bundle registered separately. Google sign-in
 is enabled in both consoles, with environment-specific public project names and the
 Kunal-approved support contact. No Identity Platform or billing upgrade was made.
-The existing Frontend still uses its legacy Firebase configuration; migration and a
-real app login test remain FP-14 work.
+The Frontend has matching Dev/Demo configurations. Real simulator email sessions,
+logout and account switching passed; interactive Google/device checks remain before
+release. Email/password was explicitly enabled in both projects without upgrade.
 
 | Environment | Registered iOS app ID |
 | --- | --- |
@@ -88,8 +92,9 @@ First verify `gcloud billing projects describe PROJECT_ID` reports `billingEnabl
 Do not link a billing account or start a paid/free-trial upgrade. The operator requires
 API enablement, Firebase project administration, database creation and Rules deployment.
 The active foundation grants one API service account per environment only
-`roles/datastore.user` in its own project. No project administration or Firebase Auth
-administration role is granted. Private keys are provisioned outside Terraform and
+`roles/datastore.user` plus the custom `footylevelsAuthState` role containing only
+`firebaseauth.users.get` in its own project. No project administration or Firebase
+Auth administration role is granted. Private keys are provisioned outside Terraform and
 stored in owner-only files; never in state/source or on the frontend.
 
 ```sh
@@ -115,8 +120,7 @@ On reprovisioning, enable that provider on Spark and select the owner's approved
 contact; do not assume permission to publish another address. Terraform has registered
 the existing iOS bundle `ca.sheridan.FootyLevels-Frontend`
 in each project; do not create duplicates.
-Use that project's matching iOS configuration when FP-14/16 implements environment
-selection. Google OAuth setup needs the account-specific clients/consent configuration;
+The app uses the matching iOS configuration through `ApplicationEnvironment`. Google OAuth setup needs the account-specific clients/consent configuration;
 no OAuth secret or dummy credential is managed in Terraform. Do not enable phone
 authentication or upgrade to Identity Platform. Verify a real social login before release.
 
@@ -140,7 +144,9 @@ and verified on FootyLevels. Normal Google/Supabase HTTPS requests now work when
 launched through [the isolated DNS wrapper](dgx/README.md), with certificate validation
 and unchanged shared network settings. Separate scoped runtime credentials subsequently passed authenticated Firestore and
 Supabase round trips in both environments; see [runtime access](dgx/runtime-access.md).
-FP-52 will check the allocation, scheduler, isolated GPU/runtime and worker identity.
+FP-52 verified the authorized shared team service, model provenance and fresh body
+outputs without replacing its processes. Optional football reconstruction reported
+GPU OOM; durable job integration and coordinated runtime ownership remain pending.
 The [approved public ngrok endpoint](dgx/ngrok.md) now reaches the existing API on
 8010; health and project reads pass. Personal Google administration credentials stay
 on the Mac. The trusted API uses separate scoped runtime identities and protected
