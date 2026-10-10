@@ -3,6 +3,7 @@ locals {
     "cloudresourcemanager.googleapis.com", "serviceusage.googleapis.com",
     "firebase.googleapis.com", "firestore.googleapis.com",
     "firebaserules.googleapis.com", "identitytoolkit.googleapis.com",
+    "iam.googleapis.com",
   ])
 }
 
@@ -67,6 +68,7 @@ output "application_environment" {
     FIREBASE_PROJECT_ID     = var.project_id
     FIREBASE_IOS_APP_ID     = google_firebase_apple_app.ios.app_id
     FIRESTORE_DATABASE      = google_firestore_database.app.name
+    FIRESTORE_API_IDENTITY  = google_service_account.api.email
     FOOTYLEVELS_ENVIRONMENT = var.environment
   }
 }

@@ -6,11 +6,11 @@ Current requirement: **free services only, no budget, no billing linkage or Blaz
 | --- | --- | --- |
 | Firebase social login | Spark projects | Google provider enabled in both; app migration/login test in FP-14 |
 | Firestore application records | Spark, Montreal | One protected default database per environment |
-| API | Mac testing via existing DGX API; one DGX monolith proposed | SSH tunnel verified; public ngrok deployment and cloud adapters pending |
-| CPU media worker | Local testing first; DGX role planned | Packaging/integration pending |
+| API | Existing DGX service through ngrok; modular DGX monolith selected | Public health/project reads verified; cloud adapters pending |
+| Media preparation | Background work in the DGX deployment | Packaging/integration pending |
 | 3D generation | On-premises DGX | SSH/GPU access verified; application-scoped DNS launcher verifies cloud HTTPS access |
 | Private videos and generated assets | Supabase Free, Canada Central | Both environments' buckets created and verified. See [storage guide](supabase/README.md) |
-| Durable job dispatch | Local testing contract pending implementation | Pub/Sub/Tasks deferred |
+| Durable job dispatch | Firestore job records claimed by DGX background runner | Implementation pending; Pub/Sub/Tasks deferred |
 
 The full cloud design cannot be run on Firebase Spark: Cloud Run and Pub/Sub require
 billing, and current Cloud Storage for Firebase also requires Blaze.
@@ -87,7 +87,10 @@ credentials; they do not link a billing account or upgrade Firebase.
 First verify `gcloud billing projects describe PROJECT_ID` reports `billingEnabled: false`.
 Do not link a billing account or start a paid/free-trial upgrade. The operator requires
 API enablement, Firebase project administration, database creation and Rules deployment.
-No application runtime IAM access is granted by this Spark foundation.
+The active foundation grants one API service account per environment only
+`roles/datastore.user` in its own project. No project administration or Firebase Auth
+administration role is granted. Private keys are provisioned outside Terraform and
+stored in owner-only files; never in state/source or on the frontend.
 
 ```sh
 cp infra/spark/dev.tfvars.example infra/spark/dev.tfvars
@@ -135,11 +138,13 @@ resolver is missing upstream DNS configuration. Inspection of Kunal's working VA
 deployment identified its private application resolver environment, which was replicated
 and verified on FootyLevels. Normal Google/Supabase HTTPS requests now work when
 launched through [the isolated DNS wrapper](dgx/README.md), with certificate validation
-and unchanged shared network settings. This does not grant authenticated data access.
+and unchanged shared network settings. Separate scoped runtime credentials subsequently passed authenticated Firestore and
+Supabase round trips in both environments; see [runtime access](dgx/runtime-access.md).
 FP-52 will check the allocation, scheduler, isolated GPU/runtime and worker identity.
-A public ngrok endpoint for the proposed DGX API has not been created. Personal Google
-administration credentials must stay on the Mac; a trusted API needs scoped runtime
-credentials and protected server configuration before cloud data integration.
+The [approved public ngrok endpoint](dgx/ngrok.md) now reaches the existing API on
+8010; health and project reads pass. Personal Google administration credentials stay
+on the Mac. The trusted API uses separate scoped runtime identities and protected
+server configuration before cloud integration.
 The deferred guide documents outbound endpoint/WIF requirements for the original plan.
 
 Kunal selected [Supabase Free](supabase/README.md) for private video/model files.
@@ -148,21 +153,23 @@ Both environments' `private-media` and `reference-assets` buckets are verified p
 limited to 52,428,800 bytes, with object RLS enabled and no client object policies.
 The application adapter still needs implementation and end-to-end verification.
 It does not host the Python API or CPU processing. Following the initial local-testing
-decision, Kunal proposed one monolithic DGX API with background model processing and
+decision, Kunal selected one modular DGX API with background model processing and
 an ngrok HTTPS endpoint. The app would read job metadata and render downloaded assets.
-This proposed deployment is not yet implemented; no Render service or new paid host
+The existing service is tunneled; the new durable jobs/cloud integration is not yet
+implemented. No Render service or new paid host
 is selected. Reuse the existing pipeline and interfaces with the Supabase asset adapter
 in FP-17 and durable Firestore job records. Generation should return a job ID and run
 in the background, with bounded GPU concurrency. New direct app reads of Firestore
 require per-user read rules; current foundation rules deny all direct client access.
 
-For the simulator, use the local API address documented in the application's setup.
-A physical iPhone needs the Mac's LAN address on the same permitted network;
+For Skill Lab, both simulator and phone can use the verified ngrok HTTPS address.
+The optional Mac SSH tunnel is available to the simulator. When using a Mac LAN server,
+a physical iPhone needs the Mac's LAN address on the same permitted network;
 `localhost` on the phone refers to the phone. Keep any development login bypass
 limited to debug builds. Local user ADC is for development only and must not be
 copied to DGX or committed. New Firestore/Supabase environment names do not make the
 existing API use those providers; that integration belongs to the implementation tickets.
 
-FP-50 remains In Progress until its actual free resources, Authentication and access
-evidence are recorded. The original full-cloud acceptance and later hosting tickets
-need reconciliation with the free-only constraint; no live end-to-end generation is claimed.
+FP-50 foundation resources and access are verified. FP-53/54/55 have been reconciled
+with Firestore dispatch and one DGX deployment; no paid services are selected.
+The complete application generation/login/playback flow remains implementation work.

@@ -56,8 +56,10 @@ one DGX backend that hosts the API and background generation together. In that d
 the trusted API needs its own scoped Firestore runtime identity and private Supabase
 server configuration; administration ADC and VAC credentials must not be reused.
 Authentication, ownership checks, durable jobs and the storage adapter still belong
-to the implementation tickets. No live FootyLevels cloud credential or authenticated
-data permission is claimed by the connectivity checks here.
+to the implementation tickets. Separate data-only API credentials are now installed privately. Both environments
+passed authenticated Firestore and Supabase round trips through the launcher; see
+[runtime access evidence](runtime-access.md). The earlier unauthenticated connectivity
+checks alone did not establish these permissions.
 
 The existing DGX API compatibility path below is available for local tests through
 the Mac. The existing API now responds publicly through the approved ngrok endpoint. The new
@@ -112,8 +114,8 @@ validation, with no credentials or manual destination IPs:
 The command ran in a different mount namespace; the host resolver's checksum was
 identical before and after. Ordinary host-shell DNS remained broken, confirming the
 configuration was confined to the launched command. These checks resolve the
-hostname/TLS connectivity blocker for this launch method. Authenticated Firestore
-reads/writes, Supabase upload/download and fresh model generation remain unverified.
+hostname/TLS connectivity blocker for this launch method. The later [runtime access probe](runtime-access.md) verified authenticated Firestore
+and Supabase round trips and cleanup. Fresh model generation remains unverified.
 
 ## Existing frontend compatibility path
 

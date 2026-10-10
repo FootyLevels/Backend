@@ -76,22 +76,37 @@ to FP-17/54; a supplied MIME header alone is not validation.
 Add `SUPABASE_URL`, `SUPABASE_MEDIA_BUCKET=private-media` and
 `SUPABASE_REFERENCE_BUCKET=reference-assets` to the future server configuration.
 Only the trusted API receives a Supabase server secret, kept outside source/state.
-Do not put a server/service-role key in the iOS app, Firestore job document or DGX
-worker. Start with API-mediated, scoped upload/download capabilities after Firebase
+Use `SUPABASE_SECRET_KEY` (`sb_secret_...`), never a client publishable key, for
+the trusted API. Do not put it in the iOS app, Firestore job document or job payload. Start with API-mediated, scoped upload/download capabilities after Firebase
 identity and ownership checks. The server secret bypasses Storage RLS; server checks
 are essential. Initial buckets intentionally grant clients no direct access.
 
-The DGX should receive only the permitted input/output asset capabilities for the
-leased job, refreshed through an authenticated API if they expire. A public bucket
+With the selected monolithic DGX deployment, the trusted API/background runner share
+server configuration. Model adapters receive only the paths/data for the claimed job,
+not configuration secrets. If GPU processing later moves into an independently trusted
+service, replace shared configuration with per-job asset capabilities. A public bucket
 or broadly readable private media directory is not a substitute for that contract.
 Use immutable attempt paths and explicitly scoped deletion through the API/cleanup
-worker. Supabase credentials and endpoint reachability on DGX still need validation.
+worker. DGX hostname-based HTTPS reachability is verified through the isolated DNS launcher.
+Authenticated upload/download still requires the private server keys and probe.
 
 For larger clips, Supabase recommends [TUS resumable uploads](https://supabase.com/docs/guides/storage/uploads/resumable-uploads)
 above 6 MB. FP-16 must adapt the current upload contract to the chosen provider; an
 existing GCS session URL is not compatible with TUS. The overall 50 MB limit still applies.
 
-Storage alone does not host the Python API or CPU processing. Kunal selected local API
-testing on his Mac for now, with deployment hosting explicitly deferred. Durable DGX
-dispatch remains implementation work in FP-52/53/54/55. No live upload
+Storage alone does not host the Python API or media processing. Kunal selected a
+modular DGX API/background runner exposed through ngrok; public reads of the existing
+Skill Lab service are verified. Durable Firestore job claiming/recovery and model
+integration remain implementation work in FP-52/53/54/55. No live upload
 or reconstruction is implied by creation of a bucket.
+
+## Private credential entry
+
+The [interactive helper](../dgx/configure_storage.py) stores each environment's secret
+in `~/.config/footylevels/{dev|demo}/runtime.json`, directory mode 0700/file mode 0600.
+Run it on DGX and enter the matching project's key at its hidden prompt. Do not paste
+keys in chat or pass them as shell arguments. See [runtime access](../dgx/runtime-access.md)
+for the disposable connectivity probe and responsibility boundaries.
+
+New secret keys go in the `apikey` header, not `Authorization: Bearer`; they are not
+JWTs. [Supabase API keys](https://supabase.com/docs/guides/getting-started/api-keys).

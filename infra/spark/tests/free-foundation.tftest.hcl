@@ -24,6 +24,22 @@ run "free_foundation" {
     condition     = google_firebase_apple_app.ios.bundle_id == "ca.sheridan.FootyLevels-Frontend" && google_firebase_apple_app.ios.deletion_policy == "PREVENT"
     error_message = "Register the existing iOS bundle separately in each project and protect it from deletion."
   }
+  assert {
+    condition     = google_project_iam_member.api_records.role == "roles/datastore.user" && google_project_iam_member.api_records.project == var.project_id && google_service_account.api.account_id == "footylevels-api-dev"
+    error_message = "The API must receive data access only, scoped to its own environment."
+  }
+}
+
+run "demo_identity_is_separate" {
+  command = plan
+  variables {
+    project_id  = "footylevels-test-demo"
+    environment = "demo"
+  }
+  assert {
+    condition     = google_service_account.api.account_id == "footylevels-api-demo" && google_project_iam_member.api_records.project == "footylevels-test-demo" && google_service_account.api.project == "footylevels-test-demo"
+    error_message = "Demo must not reuse the development API identity or project."
+  }
 }
 
 run "reject_example_id" {
