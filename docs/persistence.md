@@ -90,3 +90,7 @@ profile/revision/lease/tombstone conflicts and immutable output). The selected l
 record/storage/catalog/reconstruction suite passes 73 tests. Its pre-existing fake
 model fixture was corrected to bypass filesystem checkpoint inspection, with a
 separate 503 test preserving the production missing-checkpoint guard.
+
+Both development/demo owned-project indexes are applied and READY. Development
+CRUD/pagination tests and a read-only Demo library query pass using the matching
+scoped identities.
