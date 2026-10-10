@@ -84,6 +84,8 @@ def client(tmp_path, monkeypatch):
 
     monkeypatch.setattr(api, "RECONSTRUCTION_DIR", tmp_path)
     api.get_extractor()._estimator = FakeEstimator()
+    # This suite uses an in-memory fake estimator, not files from a gated checkpoint.
+    monkeypatch.setattr(api.get_extractor(), "check_checkpoint", lambda: [])
     monkeypatch.setattr(api, "_reconstructor", None)
 
     yield TestClient(api.app)
@@ -105,6 +107,12 @@ def reconstruction(client):
 class TestReconstructEndpoint:
     def test_returns_200(self, reconstruction):
         assert reconstruction["id"].startswith("rec_")
+
+    def test_missing_real_checkpoint_returns_unavailable(self, client, monkeypatch):
+        monkeypatch.setattr(load_api().get_extractor(), "check_checkpoint", lambda: ["model.ckpt"])
+        response = client.post("/api/reconstruct", files={"image": ("player.jpg", jpeg_bytes(), "image/jpeg")})
+        assert response.status_code == 503
+        assert "model.ckpt" in response.json()["detail"]
 
     def test_reports_the_source_image_dimensions(self, reconstruction):
         assert reconstruction["image"] == {"width": 600, "height": 900}
