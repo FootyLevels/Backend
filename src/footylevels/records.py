@@ -108,7 +108,7 @@ class PlaybackContract(Metadata):
     schema_version: Literal[1] = 1
     topology_version: str = Field(min_length=1, max_length=80)
     coordinate_system: Literal["rightHandedYUp"] = "rightHandedYUp"
-    units: Literal["metres"] = "metres"
+    units: Literal["meters"] = "meters"
     encoding: Literal["usdz", "glb", "motionBuffers"]
 
 
