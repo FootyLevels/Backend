@@ -29,25 +29,42 @@ commit the agent authtoken. If it is absent or rejected, Kunal must run
   published vendor checksum.
 - Existing `~/.config/ngrok/ngrok.yml` contains an authtoken and has mode `0600`;
   `ngrok config check` exits successfully. No token value was printed or copied.
-  Online authentication still needs verification when the agent starts.
+  Online authentication succeeded when the agent connected.
 - Existing Skill Lab API responds at `http://127.0.0.1:8010/api/health` with HTTP 200,
   local CUDA ready and motion ready. Port `8080` has no listener.
 
-## Port decision and launch
+## Approved launch and public verification
 
-The exact supplied command forwards to `8080`. Kunal has been asked whether to use
-the existing API port `8010` instead, or retain `8080` with a local forwarder. The
-public URL must remain unchanged. No tunnel has been started while this choice is
-pending. Do not start another model runtime or restart the existing API just to move
-its port.
+Kunal approved port `8010` and, after the API rejected the public Host header with
+HTTP 400, approved `--host-header=localhost`. The existing API accepts localhost.
+No traffic policy, authentication action or rate limit was added.
 
-Launch the approved command through [with_network_dns.sh](with_network_dns.sh),
-with `~/.local/bin` on PATH. The installed helper is under
-`~/.local/share/footylevels/fp50-dns/`. Run the agent in the background with private
-logs, record its specific PID, verify the local API first, then compare the public
-`/api/health` response with the local response. A live endpoint or agent process by
-itself does not prove that requests reach the app.
+```sh
+PATH="$HOME/.local/bin:$PATH" \
+  "$HOME/.local/share/footylevels/fp50-dns/with_network_dns.sh" \
+  ngrok http 8010 --url https://ranting-pesticide-thespian.ngrok-free.dev \
+  --host-header=localhost
+```
 
-Leave the verified agent running for testing, and record how to stop that particular
-process. A public health response establishes connectivity/readiness; it does not
-prove a new GPU generation job or authenticated Firebase/Supabase data writes.
+The running agent reports upstream `http://localhost:8010`. Requests from the Mac to
+the public `/api/health` and `/api/projects` both returned HTTP 200 and application
+JSON. Health reports local CUDA and motion ready; the project route returned a list.
+No existing API/model process was restarted. Public health does not prove a fresh
+GPU generation or authenticated Firebase/Supabase writes.
+
+Set the app's Skill Lab server address to
+`https://ranting-pesticide-thespian.ngrok-free.dev`. A read-only test is:
+
+```sh
+curl https://ranting-pesticide-thespian.ngrok-free.dev/api/health
+```
+
+The agent is left running under Kunal's account. Its private log is
+`~/.local/share/footylevels/ngrok/agent.log`; launch PID/process group and endpoint
+are recorded in `endpoint.json` beside it. The verified launch process group on
+9 October was `2462717`. To stop this launch only, after checking it still belongs
+to this endpoint, run `kill -- -2462717` on the DGX. Do not kill every ngrok process.
+For a later launch use its recorded process group, not this historical PID.
+
+If a token is exposed, revoke it in the dashboard and configure the replacement
+privately on the DGX. Do not send the replacement through chat or put it in source.

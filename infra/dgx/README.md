@@ -60,9 +60,9 @@ to the implementation tickets. No live FootyLevels cloud credential or authentic
 data permission is claimed by the connectivity checks here.
 
 The existing DGX API compatibility path below is available for local tests through
-the Mac. A public ngrok endpoint for FootyLevels has not been created. The proposed
+the Mac. The existing API now responds publicly through the approved ngrok endpoint. The new
 monolith and Firebase/Supabase integration have not been deployed by this work.
-User-local ngrok installation and the pending port decision are recorded in
+User-local ngrok installation, approved launch and public verification are recorded in
 [ngrok setup](ngrok.md).
 
 ## Why VAC works and the verified DNS launcher
