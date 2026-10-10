@@ -26,6 +26,7 @@ class RecordConflict(Exception):
 
 
 class RecordsRepository(Protocol):
+    def get_user(self, uid: str) -> UserRecord: ...
     def bootstrap_user(self, uid: str, display_name: str) -> UserRecord: ...
     def create_project(self, uid: str, title: str, source: str) -> ProjectRecord: ...
     def get_project(self, uid: str, project_id: str) -> ProjectRecord: ...
@@ -88,6 +89,9 @@ class FirestoreRecords:
             return record
 
         return create(self.client.transaction())
+
+    def get_user(self, uid: str) -> UserRecord:
+        return self._record(self._ref("users", uid).get(), UserRecord)
 
     def create_project(self, uid: str, title: str, source: str) -> ProjectRecord:
         # The service invokes this only after verifying Firebase identity/account access.

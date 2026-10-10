@@ -9,6 +9,10 @@ variables {
 run "free_foundation" {
   command = apply
   assert {
+    condition     = google_project_iam_custom_role.auth_state.permissions == toset(["firebaseauth.users.get"]) && google_project_iam_member.api_auth_state.project == var.project_id
+    error_message = "Token revocation checks require user reads only, never Firebase Auth administration."
+  }
+  assert {
     condition     = !contains(local.services, "run.googleapis.com") && !contains(local.services, "storage.googleapis.com") && !contains(local.services, "pubsub.googleapis.com") && !contains(local.services, "cloudtasks.googleapis.com") && !contains(local.services, "artifactregistry.googleapis.com")
     error_message = "The active configuration must not enable the deferred hosting/storage/queue stack."
   }
