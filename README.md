@@ -6,9 +6,9 @@
 Point it at a clip of a skill move and get a per-frame 3D reconstruction of the
 player's body, built on the Momentum Human Rig (MHR).
 
-> **Scoring is not implemented.** This repo currently does extraction only.
-> The previous MediaPipe-based scoring, feedback, and DTW alignment layers were
-> removed — see the git history if you need them back.
+> **Scoring and AQA are outside the product scope.** FootyLevels supports
+> reconstruction, playback and user-controlled visual review, without judging
+> whether a skill was performed correctly.
 
 ## Pipeline
 
@@ -26,6 +26,9 @@ forward pass per frame. There is no temporal smoothing and no tracking.
 Cloud/DGX infrastructure setup for FP-50 is documented in [infra/README.md](infra/README.md).
 It configures the free Firebase/Firestore foundation and Supabase storage separately from this local reconstruction runtime;
 the current API does not yet consume those cloud settings.
+FP-51 adds [validated application records and transactional Firestore repositories](docs/persistence.md)
+alongside the existing local sequence storage. Authenticated API integration follows
+in FP-14; these records are not yet wired into the running API.
 
 ### 1. Python environment
 
