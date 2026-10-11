@@ -115,9 +115,16 @@ It supervises both workers and reaps them on shutdown. This adds no public model
 route or ngrok traffic policy. Whole-motion adapters and authenticated request/UI
 integration remain FP-39/FP-19/FP-40 work.
 
+The launcher passes explicit absolute socket/FFmpeg paths via `--adapter-arg`.
+This matters inside the isolated DNS user namespace: the account appears as uid 0
+and passwd reports `/root`, while the adapter's HOME intentionally points to its
+temporary workspace. Neither is a reliable path to the real DGX tools. Standalone
+adapter invocations require `--socket` and `--ffmpeg` as well as the workspace.
+No cloud credentials are passed in arguments or environment to that child.
+
 ## Verification and remaining integration
 
-Six real Development Firestore reconstruction tests cover concurrent claims, heartbeat/stage
+Seven real Development Firestore reconstruction tests cover concurrent claims, heartbeat/stage
 fences, crash/expired-lease recovery, stale publication, exact completion replay,
 retry delays/exhaustion, attempt/total deadlines, owner-scoped cancellation,
 tombstones/physical deletion, canonical input and isolated operator pause/resume.
@@ -128,12 +135,34 @@ media. Eight local child-process tests verify credential isolation, wrong proven
 hash/path/symlink rejection, cancellation/timeout cleanup and network retry handling.
 These tests generate no GPU work or cloud media.
 
-The lifecycle and bounded runner are implemented but are not yet driving the existing model runtime.
-FP-53 remains In Progress until the bounded runner is connected and verified on the
-DGX. FP-39 supplies the selected-frame/motion adapter and verified private artifact
-publication; it must reuse the single warm runtime rather than load another model.
+Development's bounded runner drives the existing warm model through the private
+keyframe adapter. The actual GPU/cloud probe passed on `8abf8d9` with model runtime
+`429deeb`: after an owned API/worker restart the dispatcher reclaimed an abandoned
+expired claim as attempt 2, generated two GLBs and a manifest, and published their
+verified bytes privately in Supabase with immutable Firestore provenance. Both GLBs
+independently decoded to 18,439 finite vertices and 36,874 triangular faces. Exact
+adapter replay added no inference; duplicate claims were ignored, old lease rights
+were rejected and a lost-completion acknowledgement replayed the same result.
+
+The probe then cancelled a real in-flight model request. The CPU adapter stopped
+and was reaped, staging disappeared, the model quiesced and no cancelled result
+published. Exact fixture cleanup verified absence of the source, seven prepared
+outputs, three result files, private model-cache files and metadata/quota records.
+The earlier path-failure fixture was also cancelled and cleaned before retrying.
+The original source and its revision remained unchanged throughout generation.
+
+Final checks: 216 local backend tests passed (18 explicit opt-in/platform skips),
+16 real Development Firestore tests passed, 69 current DGX cloud-service tests and
+30 GPU-environment runtime/IPC tests passed. The latter excludes three CPU adapter
+cases requiring the cloud SDK; those pass locally and the actual cloud-environment
+adapter is exercised by the real GPU/storage probe. Model tests use fake inference
+except the separate opted-in live probe. Runtime and cloud environments remain
+separate; no cloud SDK/credentials or second model were added to the GPU service.
+
+FP-39 supplies authenticated frame selection/request APIs and the whole-motion
+adapter; FP-19/40 integrate durable progress, private assets and iOS playback.
 The public compatibility model API and authenticated local API remain separate.
-This checkpoint is not an end-to-end iOS-to-3D verification.
+This is server-path verification, not an authenticated iOS-to-new-3D verification.
 
 The deployment check exposed an existing shutdown defect: Uvicorn re-raised
 SIGTERM before the launcher could reap its media child, leaving the old worker's
@@ -142,11 +171,10 @@ the cloud worker's lifetime to its supervisor on Linux. Regression tests cover
 graceful shutdown and a forced parent crash. A live Development restart confirmed
 the API and worker both stopped and restarted with one worker and no orphan.
 
-Verified checkpoint: 200 local backend tests passed (16 explicitly skipped),
+Initial foundation checkpoint (`470b2d2`): 200 local backend tests passed (16 explicitly skipped),
 15 real Firestore tests passed, and 66 candidate tests passed on the DGX, including
-both shutdown scenarios and actual FFmpeg decoding. Development runs `78a3b37`;
-GPU dispatch is disabled pending the adapter integration. The warm compatibility
-model runtime remains `c865730`.
+both shutdown scenarios and actual FFmpeg decoding. Development then ran `78a3b37`
+with GPU dispatch disabled, and the warm compatibility runtime was `c865730`.
 
 After the shutdown fix, the running deployment automatically prepared a real
 private synthetic clip through Firestore/Supabase: six previews and all seven

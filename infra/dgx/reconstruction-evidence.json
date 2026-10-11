@@ -1,45 +1,123 @@
 {
   "ticket": "FP-53",
-  "status": "inProgress",
+  "status": "complete",
   "verifiedDate": "2026-10-11",
   "environment": "dev",
   "branch": "codex/fp-53-reconstruction-jobs",
   "lifecycleRevision": "cd8c43e",
   "runnerRevision": "83f326a",
-  "activeApplicationRevision": "78a3b37",
-  "activeReleaseArchiveSha256": "62612aff03fc76caee468010bfc0b1262e2efd6e86691a94e363c8cbb96b790f",
+  "privateBridgeRevision": "429deeb",
+  "rollingUpgradeFixRevision": "c1db586",
+  "activeApplicationRevision": "8abf8d9",
+  "activeModelRuntimeRevision": "429deeb",
+  "releaseValidation": {
+    "baseRevision": "0d8f535",
+    "baseArchiveSha256": "b1c025978cb626fe08afe201617a3a871a086b9d088b6dbff51c40ad8a657fc4",
+    "deltaArchiveSha256": "5ddb231e6d9557e901acd9ae988e55c4a712ba7d10e9f3e3f5430c43d02b7bd5"
+  },
   "verification": {
-    "localBackendTestsPassed": 200,
-    "localBackendTestsExplicitlySkipped": 16,
-    "realDevelopmentFirestoreTestsPassed": 15,
-    "dgxCandidateTestsPassed": 66,
+    "localBackendTestsPassed": 216,
+    "localBackendTestsExplicitlySkipped": 18,
+    "realDevelopmentFirestoreTestsPassed": 16,
+    "realFirestoreTestSourceRevision": "429deeb",
+    "dgxCloudServiceTestsPassed": 69,
+    "dgxModelEnvironmentRuntimeAndIpcTestsPassed": 30,
+    "gpuEnvironmentCpuAdapterCasesDeselected": 3,
+    "adapterCasesPassedLocallyAndRealCloudProbePassed": true,
     "gracefulAndForcedSupervisorShutdownTestsPassedOnLinux": true,
-    "liveGracefulRestartVerified": true,
-    "oldWorkerReaped": true,
-    "anonymousCancellationStatus": 401,
-    "automaticPrivateClipPreparation": {
+    "liveRestartReapedApiAndBothWorkers": true,
+    "dnsUserNamespaceToolPathFailureFixed": true,
+    "firstFailedFixtureCancelledAndCleaned": true,
+    "realGpuCloudProbe": {
+      "ticket": "FP-53",
+      "environment": "dev",
+      "gpuUsed": true,
+      "fullIosEndToEnd": false,
       "passed": true,
-      "sourceRevisionPreserved": true,
-      "previews": 6,
-      "outputChecksumsVerified": 7,
-      "sourceObjectsRemoved": 1,
-      "preparedObjectsRemoved": 7,
-      "fixtureRecordAndObjectAbsenceVerified": true,
-      "failedUpgradeProbeAlsoCleaned": true
+      "runningDispatcherVerified": true,
+      "abandonedClaimRecovered": true,
+      "attemptCount": 2,
+      "generatedBodies": 2,
+      "outputChecksumsVerified": 3,
+      "decodedVerticesPerBody": 18439,
+      "decodedFacesPerBody": 36874,
+      "cachedReplayAddedInference": false,
+      "oldLeaseRejected": true,
+      "duplicateClaimsIgnored": true,
+      "completionReplayVerified": true,
+      "originalSourcePreserved": true,
+      "engine": {
+        "modelName": "Meta SAM 3D Body",
+        "upstreamCommit": "b5c765a0d89d789985e186d396315e7590887b94",
+        "checkpointHash": "b5a2f9d305dd02626b967aa2e86021fba07065df66ce7a7e00ffb9664f150abf",
+        "configHash": "6f7a5cf42b192cc7d86f548a483895977fcf8b822b9b36e6188a4e9ce436f7b1"
+      },
+      "topologyVersion": "mhr-f6748e290ef37fbb6877c4cc-v1",
+      "realInFlightCancellationVerified": true,
+      "cancelledResultNotPublished": true,
+      "cancelledAdapterReapedAndStagingRemoved": true,
+      "modelQuiescentAfterCancellation": true,
+      "fixtureCleanup": {
+        "sourceObjectsRemoved": 1,
+        "preparedAndReconstructionObjectsRemoved": 10,
+        "absenceVerified": true,
+        "fixtureMetadataAndQuotaRemoved": true,
+        "privateModelCacheRemoved": true
+      }
     },
-    "healthChecksAfterFixtureCleanupSeconds": [0, 60, 130],
-    "mediaWorkerCountAtEachHealthCheck": 1,
-    "stagingDirectoriesAtEachHealthCheck": 0,
-    "existingPublicModelRuntimeHealthy": true,
-    "existingPublicModelRuntimeRevision": "c865730",
-    "bodyModelRemainedLoaded": true
+    "stabilityAfterFixtureCleanup": [
+      {
+        "elapsedSeconds": 0,
+        "cloudHealthy": true,
+        "modelWarm": true,
+        "ownedProcesses": {
+          "media": 1,
+          "gpuDispatcher": 1,
+          "model": 1
+        },
+        "stagingDirectories": 0,
+        "privateModelCacheEntries": 0,
+        "fixtureRecoveryFileAbsent": true
+      },
+      {
+        "elapsedSeconds": 60,
+        "cloudHealthy": true,
+        "modelWarm": true,
+        "ownedProcesses": {
+          "media": 1,
+          "gpuDispatcher": 1,
+          "model": 1
+        },
+        "stagingDirectories": 0,
+        "privateModelCacheEntries": 0,
+        "fixtureRecoveryFileAbsent": true
+      },
+      {
+        "elapsedSeconds": 130,
+        "cloudHealthy": true,
+        "modelWarm": true,
+        "ownedProcesses": {
+          "media": 1,
+          "gpuDispatcher": 1,
+          "model": 1
+        },
+        "stagingDirectories": 0,
+        "privateModelCacheEntries": 0,
+        "fixtureRecoveryFileAbsent": true
+      }
+    ],
+    "publicNgrokModelHealthPassed": true,
+    "publicNgrokModelRevision": "429deeb"
   },
   "limitations": {
-    "gpuDispatcherEnabled": false,
-    "realGpuReconstructionGeneratedByDurableRunner": false,
+    "gpuDispatcherEnabled": true,
+    "realGpuReconstructionGeneratedByDurableRunner": true,
+    "selectedKeyframesAdapterOnly": true,
     "fullIosToNew3dFlowVerified": false,
     "authenticatedApiHasPublicOrigin": false,
-    "demoDeploymentChanged": false
+    "demoDeploymentChanged": false,
+    "automaticModelProcessRestart": false,
+    "modelScaleAndCameraCalibrationVerified": false
   },
-  "next": "Connect the serial durable runner to the existing warm model with attempt-aware dispatch, cancellation and recovery; verify a real private reconstruction before closing FP-53. FP-39 provides the authenticated selected-frame/motion contract and FP-19/40 the iOS playback integration."
+  "next": "FP-39 authenticated selected-frame/request API and whole-motion adapter; FP-19/40 durable progress, private assets and iOS playback. Authenticated public origin, physical-device verification and committed deletion/retention remain separate work."
 }

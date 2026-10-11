@@ -12,7 +12,7 @@ runner leases/recovery FP-53.
 | --- | --- |
 | users | Firebase UID as ID, displayName, accountState |
 | projects | ownerId, title/source, state, inputRevision, video AssetRef, activeJobId, latestReconstructionId, deletedAt |
-| jobs | owner/project, kind, inputRevision/hash/profileVersion, pinned source, status/stage, attempts and lease, result link |
+| jobs | owner/project, kind, inputRevision/hash/profileVersion, pinned source, selected keyframes/boxes when applicable, status/stage, attempts and lease, result link |
 | reconstructions | owner/project/job/revision, source, engine/checkpoint/config hashes, playback contract, bounded artifact refs, ready/partial and frame counts |
 | references | title, immutable version, asset refs, permission/license reference, publicationState |
 | comparisons | owner, exact left result, right result or versioned reference, overlay/sideBySide, manual time offset, state |
@@ -43,7 +43,13 @@ A deterministic job ID hashes owner/project/input revision/kind/input hash/profi
 Concurrent identical requests return the same durable job; different requests are
 rejected while a job is active. Input hash is computed by the trusted service from
 canonical frame/crop/segment settings, never taken as authorization from client JSON.
-The later runner supplies the fenced lease and persists selected processing settings.
+The runner supplies the fenced lease. The `body-keyframes-v1` profile persists
+1–24 distinct `keyframes` containing `frameIndex` and normalized `[left, top, right,
+bottom]` `bbox`. Frame indices refer to the pinned canonical 30 fps video. The
+request hash includes its SHA256, profile and exact selection order/boxes, so
+recovery repeats the same input. Ordinary media/legacy job documents omit this
+new field for compatibility with older strict workers during a rolling upgrade.
+Old services must be upgraded before consuming the new body profile.
 
 Publication atomically creates the immutable result, completes the job and updates
 the project pointer. It requires current source/revision, a nonexpired matching lease,
