@@ -6,7 +6,7 @@ from contextlib import asynccontextmanager
 from pathlib import Path
 from typing import Literal
 
-from fastapi import FastAPI, File, HTTPException, UploadFile
+from fastapi import FastAPI, File, HTTPException, UploadFile, Response
 from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field, model_validator
@@ -72,6 +72,14 @@ def projects():
 @app.get("/api/projects/{project_id}")
 def project(project_id: str):
     return get_project(project_id)
+
+
+@app.delete("/api/projects/{project_id}", status_code=204)
+def delete_project(project_id: str):
+    with store.LOCK:
+        require_idle(get_project(project_id))
+        shutil.rmtree(store.project_dir(project_id))
+    return Response(status_code=204)
 
 
 @app.post("/api/projects", status_code=201)
