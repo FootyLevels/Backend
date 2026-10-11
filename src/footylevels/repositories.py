@@ -7,9 +7,12 @@ import base64
 from datetime import datetime
 import hashlib
 import json
+import re
+import time
 from typing import Protocol
 
 from google.cloud import firestore
+from google.api_core import exceptions
 from google.cloud.firestore_v1.base_query import FieldFilter
 from pydantic import TypeAdapter
 
@@ -25,10 +28,15 @@ class RecordConflict(Exception):
     """Stale input, incompatible state or rejected late publication."""
 
 
+class RecordUnavailable(Exception):
+    """A bounded metadata operation exhausted its transient retries."""
+
+
 class RecordsRepository(Protocol):
     def get_user(self, uid: str) -> UserRecord: ...
     def bootstrap_user(self, uid: str, display_name: str) -> UserRecord: ...
-    def create_project(self, uid: str, title: str, source: str) -> ProjectRecord: ...
+    def create_project(self, uid: str, title: str, source: str, key: str | None = None,
+                       label: str | None = None) -> ProjectRecord: ...
     def get_project(self, uid: str, project_id: str) -> ProjectRecord: ...
     def list_projects(self, uid: str, limit: int = 20, cursor: str | None = None) -> tuple[list[ProjectRecord], str | None]: ...
     def enqueue_reconstruction(self, uid: str, project_id: str, input_revision: int,
@@ -93,12 +101,44 @@ class FirestoreRecords:
     def get_user(self, uid: str) -> UserRecord:
         return self._record(self._ref("users", uid).get(), UserRecord)
 
-    def create_project(self, uid: str, title: str, source: str) -> ProjectRecord:
+    def create_project(self, uid: str, title: str, source: str, key: str | None = None,
+                       label: str | None = None) -> ProjectRecord:
         # The service invokes this only after verifying Firebase identity/account access.
-        ref = self.client.collection("projects").document()
-        record = ProjectRecord(id=ref.id, owner_id=uid, title=title, source=source)
-        ref.create(record.document())
-        return record
+        _id.validate_python(uid)
+        if key is not None and not re.fullmatch(r"[a-zA-Z0-9_-]{16,80}", key):
+            raise ValueError("Invalid project Idempotency-Key")
+        digest = hashlib.sha256(json.dumps([title, source, label], separators=(",", ":")).encode()).hexdigest()
+        identifier = hashlib.sha256(json.dumps([uid, key], separators=(",", ":")).encode()).hexdigest() if key else None
+        ref = self.client.collection("projects").document(identifier)
+        record = ProjectRecord(id=ref.id, owner_id=uid, title=title, source=source, label=label,
+                               creation_hash=digest if key else None)
+        if key is None:
+            ref.create(record.document())
+            return record
+
+        @firestore.transactional
+        def create(transaction):
+            snapshot = ref.get(transaction=transaction)
+            if snapshot.exists:
+                existing = self._owned(self._record(snapshot, ProjectRecord), uid)
+                if existing.creation_hash != digest:
+                    raise RecordConflict("Idempotency key was reused with different input")
+                return existing
+            transaction.create(ref, record.document())
+            return record
+
+        # Firestore retries commit conflicts itself, but not aborted reads.
+        for attempt in range(4):
+            try:
+                return create(self.client.transaction())
+            except (exceptions.Aborted, ValueError) as error:
+                if not isinstance(error, exceptions.Aborted) and not isinstance(error.__cause__, exceptions.Aborted):
+                    raise
+                if attempt == 3:
+                    raise RecordUnavailable() from None
+                time.sleep(0.1 * 2**attempt)
+            except (exceptions.ServiceUnavailable, exceptions.DeadlineExceeded):
+                raise RecordUnavailable() from None
 
     def get_project(self, uid: str, project_id: str) -> ProjectRecord:
         return self._owned(self._record(self._ref("projects", project_id).get(), ProjectRecord), uid)

@@ -5,7 +5,7 @@ from pathlib import Path
 from typing import Annotated
 import uuid
 
-from fastapi import Depends, FastAPI, HTTPException, Query, Request
+from fastapi import Depends, FastAPI, Header, HTTPException, Query, Request
 from fastapi.responses import JSONResponse
 from firebase_admin import credentials, delete_app, initialize_app
 from google.cloud import firestore
@@ -14,12 +14,13 @@ from pydantic import Field
 from footylevels.authentication import (AuthenticationRejected,
     AuthenticationUnavailable, FirebaseIdentityVerifier, Identity)
 from footylevels.records import Id, Metadata
-from footylevels.repositories import FirestoreRecords, RecordConflict, RecordNotFound
+from footylevels.repositories import FirestoreRecords, RecordConflict, RecordNotFound, RecordUnavailable
 
 
 class CreateProject(Metadata):
     title: str = Field(min_length=1, max_length=120)
     source: Annotated[str, Field(pattern=r"^(capture|gallery)$")]
+    label: str | None = Field(default=None, min_length=1, max_length=80)
 
 
 class RenameProject(Metadata):
@@ -47,6 +48,10 @@ def create_app(records, verifier, lifespan=None, *, assets=None, uploads=None) -
     @app.exception_handler(ValueError)
     async def invalid(request, error):
         return JSONResponse({"detail": "Invalid request"}, status_code=422)
+
+    @app.exception_handler(RecordUnavailable)
+    async def metadata_unavailable(request, error):
+        return JSONResponse({"detail": "Service temporarily unavailable"}, status_code=503)
 
     def identity(request: Request) -> Identity:
         values = request.headers.getlist("authorization")
@@ -90,8 +95,10 @@ def create_app(records, verifier, lifespan=None, *, assets=None, uploads=None) -
         return records.get_user(user.uid)
 
     @app.post("/api/projects", status_code=201)
-    def create_project(body: CreateProject, user: Identity = Depends(active_identity)):
-        return records.create_project(user.uid, body.title, body.source)
+    def create_project(body: CreateProject,
+                       idempotency_key: str | None = Header(None, pattern=r"^[a-zA-Z0-9_-]{16,80}$"),
+                       user: Identity = Depends(active_identity)):
+        return records.create_project(user.uid, body.title, body.source, idempotency_key, body.label)
 
     @app.get("/api/projects")
     def projects(limit: int = Query(20, ge=1, le=50), cursor: str | None = Query(None, max_length=2048),

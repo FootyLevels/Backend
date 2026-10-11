@@ -28,9 +28,18 @@ class TestRecords:
             raise RecordNotFound()
         return self.users[uid]
 
-    def create_project(self, uid, title, source):
-        project = ProjectRecord(id="project-" + str(len(self.projects)), owner_id=uid,
-                                title=title, source=source)
+    def create_project(self, uid, title, source, key=None, label=None):
+        import hashlib
+        import json
+        digest = hashlib.sha256(json.dumps([title, source, label]).encode()).hexdigest()
+        identifier = hashlib.sha256(f'{uid}/{key}'.encode()).hexdigest() if key else 'project-' + str(len(self.projects))
+        if identifier in self.projects:
+            existing = self.get_project(uid, identifier)
+            if existing.creation_hash != digest:
+                raise RecordConflict()
+            return existing
+        project = ProjectRecord(id=identifier, owner_id=uid,
+                                title=title, source=source, label=label, creation_hash=digest if key else None)
         self.projects[project.id] = project
         return project
 
@@ -153,3 +162,23 @@ def test_sdk_error_classification(monkeypatch, error, expected):
     monkeypatch.setattr(auth, "verify_id_token", reject)
     with pytest.raises(expected):
         FirebaseIdentityVerifier(object()).verify("test-token")
+
+
+def test_project_retry_is_scoped_validated_and_does_not_resurrect(setup):
+    client, records = setup
+    payload = {'title': 'First recording', 'source': 'capture', 'label': 'Practice'}
+    h = {**headers('alice'), 'Idempotency-Key': 'draft-project-key-1234'}
+    first = client.post('/api/projects', headers=h, json=payload)
+    assert first.status_code == 201
+    pid = first.json()['id']
+    assert client.post('/api/projects', headers=h, json=payload).json()['id'] == pid
+    client.patch(f'/api/projects/{pid}', headers=headers('alice'), json={'title': 'Renamed'})
+    assert client.post('/api/projects', headers=h, json=payload).json()['title'] == 'Renamed'
+    assert client.post('/api/projects', headers=h, json={**payload, 'label': 'Different'}).status_code == 409
+    other = client.post('/api/projects', headers={**headers('bob'), 'Idempotency-Key': h['Idempotency-Key']}, json=payload)
+    assert other.status_code == 201 and other.json()['id'] != pid
+    client.delete(f'/api/projects/{pid}', headers=headers('alice'))
+    assert client.post('/api/projects', headers=h, json=payload).status_code == 404
+    assert len(records.projects) == 2
+    for key in ['short', 'x'*81, 'bad/key-1234567890']:
+        assert client.post('/api/projects', headers={**h, 'Idempotency-Key': key}, json=payload).status_code == 422

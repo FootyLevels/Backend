@@ -61,6 +61,9 @@ class ProjectRecord(Record):
     owner_id: Id
     title: str = Field(min_length=1, max_length=120)
     source: Literal["capture", "gallery"]
+    label: str | None = Field(default=None, min_length=1, max_length=80)
+    # Original creation payload stays immutable when a project is renamed.
+    creation_hash: Sha256 | None = None
     state: Literal["uploading", "preparing", "ready", "rejected", "deleting", "deleted"] = "uploading"
     skill_id: Id | None = None
     input_revision: int = Field(default=1, ge=1)

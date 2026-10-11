@@ -179,3 +179,21 @@ def test_reference_version_and_comparison_access_rechecked(cloud):
     repo.mark_deleting(uid, project.id)
     with pytest.raises(RecordNotFound):
         repo.get_comparison(uid, uid)
+
+
+def test_durable_project_creation_retries_are_owner_scoped(cloud):
+    from footylevels.repositories import RecordConflict, RecordNotFound
+    repo, client, uid, other = cloud
+    key = 'draft-' + uuid.uuid4().hex
+    with ThreadPoolExecutor(max_workers=3) as pool:
+        projects = list(pool.map(lambda _: repo.create_project(uid, 'Original', 'capture', key, 'Practice'), range(3)))
+    assert len({p.id for p in projects}) == 1
+    pid = projects[0].id
+    repo.rename_project(uid, pid, 'Renamed')
+    assert repo.create_project(uid, 'Original', 'capture', key, 'Practice').title == 'Renamed'
+    with pytest.raises(RecordConflict):
+        repo.create_project(uid, 'Changed', 'capture', key, 'Practice')
+    assert repo.create_project(other, 'Original', 'capture', key, 'Practice').id != pid
+    repo.mark_deleting(uid, pid)
+    with pytest.raises(RecordNotFound):
+        repo.create_project(uid, 'Original', 'capture', key, 'Practice')
