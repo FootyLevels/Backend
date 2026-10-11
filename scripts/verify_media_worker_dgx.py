@@ -6,12 +6,14 @@ created. The trusted fixture is uploaded directly with the server storage key.
 Only aggregate evidence is printed; server keys remain in the private config.
 """
 import hashlib
+import argparse
 import json
 import os
 from pathlib import Path
 import subprocess
 import sys
 import tempfile
+import time
 import uuid
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -26,6 +28,9 @@ def cleanup(client, jobs, storage, uid, project_id):
     project = client.collection("projects").document(project_id).get()
     if not uid.startswith("fp54-media-") or not project.exists or project.to_dict()["ownerId"] != uid:
         raise ValueError("Fixture cleanup guard failed")
+    active_jobs = list(client.collection("jobs").where(filter=FieldFilter("ownerId", "==", uid)).stream())
+    if any(s.to_dict()["status"] == "running" for s in active_jobs):
+        raise ValueError("A worker still owns the fixture; keep its private recovery evidence")
     jobs.mark_deleting(uid, project_id)
     uploads = list(client.collection("uploads").where(filter=FieldFilter("ownerId", "==", uid)).stream())
     reservations = list(client.collection("assetReservations").where(filter=FieldFilter("ownerId", "==", uid)).stream())
@@ -76,6 +81,9 @@ def cleanup(client, jobs, storage, uid, project_id):
 
 
 def main():
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("--deployment", action="store_true", help="Let the running deployment discover and prepare the fixture")
+    args = parser.parse_args()
     if os.environ.get("FOOTYLEVELS_LIVE_MEDIA_TEST") != "1":
         raise SystemExit("Set FOOTYLEVELS_LIVE_MEDIA_TEST=1 to opt in")
     from cloud_config import load
@@ -93,6 +101,10 @@ def main():
     uid = "fp54-media-" + uuid.uuid4().hex
     project = None
     evidence = {"ticket": "FP-54", "environment": "dev", "gpuUsed": False}
+    recovery = Path.home() / ".local/share/footylevels/cloud-api/fp54-last-fixture.json"
+    with recovery.open("x") as saved:
+        os.chmod(recovery, 0o600)
+        saved.write(json.dumps({"ownerId": uid}))
     try:
         with tempfile.TemporaryDirectory(prefix="fp54-verification-") as folder:
             directory = Path(folder)
@@ -104,13 +116,20 @@ def main():
             digest = hashlib.sha256(source.read_bytes()).hexdigest()
             jobs.bootstrap_user(uid, "Temporary media verification")
             project = jobs.create_project(uid, "FP54 isolated media fixture", "gallery")
+            recovery.write_text(json.dumps({"ownerId": uid, "projectId": project.id}))
             upload = jobs.begin(uid, project.id, 1, source.stat().st_size, digest, "video/mp4", uuid.uuid4().hex)
             storage.put_file(upload.asset, source)
             preparing = jobs.commit_upload(uid, upload.id)
             assert preparing.state == "preparing" and preparing.active_job_id
-            claimed = jobs.claim(project.id, "fp54-verification")
-            assert claimed and jobs.claim(project.id, "duplicate-worker") is None
-            assert process_job(jobs, storage, claimed, directory) == "ready"
+            if args.deployment:
+                deadline = time.monotonic() + 240
+                while jobs.get_project(uid, project.id).state == "preparing" and time.monotonic() < deadline:
+                    time.sleep(3)
+                claimed = jobs.get_job(uid, preparing.active_job_id)
+            else:
+                claimed = jobs.claim(project.id, "fp54-verification")
+                assert claimed and jobs.claim(project.id, "duplicate-worker") is None
+                assert process_job(jobs, storage, claimed, directory) == "ready"
             ready = jobs.get_project(uid, project.id)
             assert ready.state == "ready" and ready.prepared_media and ready.active_job_id is None
             assert ready.video == upload.asset and ready.input_revision == 2
@@ -122,9 +141,13 @@ def main():
             evidence.update({"passed": True, "sourceRevisionPreserved": True, "previews": len(media.previews),
                 "playbackFps": media.fps, "durationSeconds": media.duration,
                 "outputChecksumsVerified": 7, "duplicateClaimsIgnored": True})
+            evidence["runningDeploymentVerified"] = args.deployment
     finally:
         if project:
             evidence["fixtureCleanup"] = cleanup(client, jobs, storage, uid, project.id)
+        else:
+            client.collection("users").document(uid).delete()
+        recovery.unlink()
         client.close()
     print(json.dumps(evidence))
 
