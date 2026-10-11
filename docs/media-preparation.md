@@ -78,7 +78,7 @@ reservation once. Deleted committed recordings and published results still use
 FP-18's deletion/retention workflow; this maintenance does not claim that ticket
 is complete or erase a player's committed source automatically.
 
-Development release `b5ba27c` is deployed on the private API at DGX loopback
+Development release `ace2707` is deployed on the private API at DGX loopback
 8011 with its supervised CPU worker. A second real fixture was discovered and
 prepared automatically by that running worker; all seven output checksums and
 fixture cleanup were verified. The API health check passed and anonymous
@@ -86,6 +86,11 @@ project requests returned 401. The separate public body runtime remained healthy
 and loaded at `c865730`. The deployed release's 56 API/metadata/processor checks
 passed. Demo/public authenticated routing and new iOS model generation are still
 separate integration work.
+Rotating queries explicitly order by document name (plus the cleanup timestamp
+for maintenance). Provider regressions verify cursors after a project is
+completed or physically deleted and after quota cleanup. The API and one CPU
+worker stayed healthy 130 seconds after fixture cleanup, covering the next
+polling cycle; no staging directories remained.
 
 Run `infra/dgx/start_cloud_api.py dev --port 8011` through the existing private
 DNS wrapper and cloud venv to start the selected deployment. It owns the CPU

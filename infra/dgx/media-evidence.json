@@ -9,7 +9,11 @@
   "realFirestoreTestsPassed": 4,
   "dgxReleaseApiMetadataProcessorTestsPassed": 56,
   "deployment": {
-    "runtimeRevision": "b5ba27c",
+    "runtimeRevision": "ace2707",
+    "rotatingCursorRegressionPassed": true,
+    "healthySecondsAfterFixtureCleanup": 130,
+    "singleCpuWorkerAliveAfterNextPollingCycle": true,
+    "remainingStagingDirectories": 0,
     "developmentApiHealthPassed": true,
     "anonymousProjectRequestsStatus": 401,
     "apiAndCpuWorkerRunningTogether": true,
