@@ -9,7 +9,7 @@ from api.cloud import create_app
 from footylevels.authentication import (AuthenticationRejected,
     AuthenticationUnavailable, FirebaseIdentityVerifier, Identity)
 from footylevels.records import ProjectRecord, UserRecord
-from footylevels.repositories import RecordConflict, RecordNotFound
+from footylevels.repositories import RecordConflict, RecordNotFound, RecordUnavailable
 
 
 class TestRecords:
@@ -187,3 +187,102 @@ def test_project_retry_is_scoped_validated_and_does_not_resurrect(setup):
     assert len(records.projects) == 2
     for key in ['short', 'x'*81, 'bad/key-1234567890']:
         assert client.post('/api/projects', headers={**h, 'Idempotency-Key': key}, json=payload).status_code == 422
+
+
+@pytest.fixture
+def reconstruction_request(setup):
+    from unittest.mock import Mock
+    from footylevels.records import AssetRef, JobRecord, MediaPreview, PreparedMedia
+    client, records = setup
+    project = records.create_project('alice', 'Permitted practice', 'gallery')
+    original = AssetRef(bucket='private-media', object_key='users/alice/source.mp4',
+                        sha256='a'*64, byte_size=10, content_type='video/mp4')
+    canonical = original.model_copy(update={'object_key': 'users/alice/prepared.mp4', 'sha256': 'b'*64})
+    preview = original.model_copy(update={'object_key': 'users/alice/preview.jpg', 'content_type': 'image/jpeg'})
+    media = PreparedMedia(video=canonical, width=320, height=240, duration=2, frame_count=60,
+                          previews=(MediaPreview(asset=preview, timestamp=0, frame_index=0),))
+    records.projects[project.id] = project.model_copy(update={'state': 'ready', 'video': original,
+                                                            'prepared_media': media})
+    def enqueue(uid, pid, revision, kind, digest, profile, *, keyframes):
+        return JobRecord(id='f'*64, owner_id=uid, project_id=pid, input_revision=revision,
+            kind=kind, input_hash=digest, profile_version=profile, source_asset=canonical,
+            keyframes=keyframes, lease_token='private-token', worker_id='private-worker')
+    records.enqueue_reconstruction = Mock(side_effect=enqueue)
+    body = {'inputRevision': 1, 'keyframes': [{'frameIndex': 15, 'bbox': [.1, .1, .9, .9]}]}
+    return client, records, project.id, body
+
+
+def test_reconstruction_request_derives_identity_and_pins_prepared_source(reconstruction_request):
+    from footylevels.model_requests import BODY_PROFILE, body_input_hash
+    from footylevels.records import KeyframeInput
+    client, records, pid, body = reconstruction_request
+    response = client.post(f'/api/projects/{pid}/reconstructions/keyframes', headers=headers('alice'), json=body)
+    assert response.status_code == 202
+    job = response.json()
+    assert response.headers['Location'] == '/api/jobs/' + job['id']
+    assert response.headers['Cache-Control'] == 'no-store'
+    assert response.headers['Vary'] == 'Authorization'
+    assert not {'leaseToken', 'workerId', 'leaseExpiresAt'} & job.keys()
+    selected = tuple(KeyframeInput.model_validate(f) for f in body['keyframes'])
+    source = records.projects[pid].prepared_media.video
+    records.enqueue_reconstruction.assert_called_once_with('alice', pid, 1, 'reconstructKeyframes',
+        body_input_hash(source, selected), BODY_PROFILE, keyframes=selected)
+    assert job['sourceAsset']['sha256'] == source.sha256
+
+
+@pytest.mark.parametrize('token,status', [(None, 401), ('expired', 401), ('bob', 404), ('outage', 503)])
+def test_reconstruction_request_checks_auth_and_ownership_before_enqueue(reconstruction_request, token, status):
+    client, records, pid, body = reconstruction_request
+    response = client.post(f'/api/projects/{pid}/reconstructions/keyframes',
+                           headers=headers(token) if token else {}, json=body)
+    assert response.status_code == status
+    records.enqueue_reconstruction.assert_not_called()
+
+
+def test_restricted_user_cannot_request_reconstruction(reconstruction_request):
+    client, records, pid, body = reconstruction_request
+    records.users['alice'] = records.users['alice'].model_copy(update={'account_state': 'restricted'})
+    assert client.post(f'/api/projects/{pid}/reconstructions/keyframes', headers=headers('alice'), json=body).status_code == 403
+    records.enqueue_reconstruction.assert_not_called()
+
+
+@pytest.mark.parametrize('change', [
+    {'ownerId': 'bob'}, {'inputHash': 'f'*64}, {'profileVersion': 'arbitrary'},
+    {'inputRevision': 0}, {'inputRevision': '1'}, {'inputRevision': True},
+    {'keyframes': []}, {'keyframes': [{'frameIndex': -1, 'bbox': [0, 0, 1, 1]}]},
+    {'keyframes': [{'frameIndex': 60, 'bbox': [0, 0, 1, 1]}]},
+    {'keyframes': [{'frameIndex': 1, 'bbox': [0, 0, .01, 1]}]},
+    {'keyframes': [{'frameIndex': 1, 'bbox': [0, 0, 2, 1]}]},
+    {'keyframes': [{'frameIndex': 1, 'bbox': [0, 0, 1, 1]}]*2},
+    {'keyframes': [{'frameIndex': i, 'bbox': [0, 0, 1, 1]} for i in range(25)]},
+])
+def test_reconstruction_rejects_untrusted_or_unbounded_inputs(reconstruction_request, change):
+    client, records, pid, body = reconstruction_request
+    assert client.post(f'/api/projects/{pid}/reconstructions/keyframes', headers=headers('alice'),
+                       json={**body, **change}).status_code == 422
+    records.enqueue_reconstruction.assert_not_called()
+
+
+@pytest.mark.parametrize('change', [{'input_revision': 2}, {'prepared_media': None}, {'state': 'preparing'}])
+def test_reconstruction_requires_current_prepared_input(reconstruction_request, change):
+    client, records, pid, body = reconstruction_request
+    records.projects[pid] = records.projects[pid].model_copy(update=change)
+    assert client.post(f'/api/projects/{pid}/reconstructions/keyframes', headers=headers('alice'), json=body).status_code == 409
+    records.enqueue_reconstruction.assert_not_called()
+
+
+@pytest.mark.parametrize('error,status', [(RecordConflict, 409), (RecordNotFound, 404), (RecordUnavailable, 503)])
+def test_reconstruction_surfaces_transaction_race_without_leaking_details(reconstruction_request, error, status):
+    client, records, pid, body = reconstruction_request
+    records.enqueue_reconstruction.side_effect = error('private repository detail')
+    response = client.post(f'/api/projects/{pid}/reconstructions/keyframes', headers=headers('alice'), json=body)
+    assert response.status_code == status
+    assert 'private repository detail' not in response.text
+
+
+def test_reconstruction_accepts_limit_and_last_canonical_frame(reconstruction_request):
+    client, records, pid, body = reconstruction_request
+    body['keyframes'] = [{'frameIndex': i, 'bbox': [0, 0, 1, 1]} for i in [*range(23), 59]]
+    response = client.post(f'/api/projects/{pid}/reconstructions/keyframes', headers=headers('alice'), json=body)
+    assert response.status_code == 202
+    assert len(response.json()['keyframes']) == 24

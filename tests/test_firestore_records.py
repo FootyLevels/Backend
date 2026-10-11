@@ -538,6 +538,66 @@ def test_body_selection_is_persisted_and_pinned_to_canonical_input(cloud):
     assert record.source_asset == media.video
 
 
+def test_authenticated_http_reconstruction_retries_cancel_and_tombstone(cloud):
+    """Real transactions; synthetic verified identities, no sign-in/GPU claims."""
+    from fastapi.testclient import TestClient
+    from api.cloud import create_app
+    from footylevels.authentication import Identity
+    from footylevels.reconstruction_jobs import FirestoreReconstructionJobs
+    from footylevels.repositories import FirestoreRecords
+    repo, client, uid, other = cloud
+    repo.bootstrap_user(uid, 'HTTP fixture')
+    repo.bootstrap_user(other, 'Other fixture')
+    jobs = media_jobs_fixture(client, uid)
+    project, _ = preparing_project(repo, jobs, uid)
+    media_claim = jobs.claim(project.id, 'fixture-media-worker')
+    media = media_result(media_claim)
+    jobs.reserve_outputs(media_claim, [media.video, media.previews[0].asset])
+    project = jobs.publish(media_claim, media)
+    class ScopedRecords(FirestoreRecords):
+        def _reconstruction_control(self):
+            return self._ref('runtimeControls', uid)
+    class FixtureVerifier:
+        def verify(self, token):
+            assert token in {uid, other}
+            return Identity(token, 'Fixture')
+    api = TestClient(create_app(ScopedRecords(client), FixtureVerifier()))
+    own = {'Authorization': 'Bearer ' + uid}
+    foreign = {'Authorization': 'Bearer ' + other}
+    path = f'/api/projects/{project.id}/reconstructions/keyframes'
+    body = {'inputRevision': project.input_revision, 'keyframes': [{'frameIndex': 15, 'bbox': [.1, .1, .9, .9]}]}
+    with ThreadPoolExecutor(max_workers=2) as pool:
+        responses = list(pool.map(lambda _: api.post(path, headers=own, json=body), range(2)))
+    assert [r.status_code for r in responses] == [202, 202]
+    identifier = responses[0].json()['id']
+    assert responses[1].json()['id'] == identifier
+    assert responses[0].headers['Location'] == '/api/jobs/' + identifier
+    durable = repo.get_job(uid, identifier)
+    assert durable.source_asset == media.video and durable.keyframes[0].frame_index == 15
+    changed = {**body, 'keyframes': [{'frameIndex': 16, 'bbox': [.1, .1, .9, .9]}]}
+    assert api.post(path, headers=own, json=changed).status_code == 409
+    assert api.post(path, headers=foreign, json=body).status_code == 404
+    assert api.get('/api/jobs/' + identifier, headers=foreign).status_code == 404
+    assert api.post('/api/jobs/' + identifier + '/cancel', headers=foreign).status_code == 404
+    claim = FirestoreReconstructionJobs(client).claim(identifier, 'fixture-reconstruction-worker')
+    assert claim is not None
+    response = api.get('/api/jobs/' + identifier, headers=own)
+    assert response.json()['status'] == 'running'
+    assert not {'leaseToken', 'leaseExpiresAt', 'workerId'} & response.json().keys()
+    assert api.post('/api/jobs/' + identifier + '/cancel', headers=own).json()['status'] == 'cancelled'
+    assert api.post(path, headers=own, json=body).json()['id'] == identifier
+    assert repo.get_project(uid, project.id).active_job_id is None
+    control = client.collection('runtimeControls').document(uid)
+    control.set({'acceptingRequests': False})
+    assert api.post(path, headers=own, json=changed).status_code == 503
+    assert api.post(path, headers=own, json=body).status_code == 202
+    control.set({'acceptingRequests': True})
+    assert api.post(path, headers=own, json=changed).status_code == 202
+    assert api.delete(f'/api/projects/{project.id}', headers=own).status_code == 202
+    assert api.post(path, headers=own, json=body).status_code == 404
+    assert api.get('/api/jobs/' + identifier, headers=own).status_code == 404
+
+
 def test_reconstruction_serial_runner_with_real_firestore_and_isolated_quota(cloud, tmp_path):
     from footylevels.reconstruction_jobs import FirestoreReconstructionJobs
     from footylevels.reconstruction_worker import run_job

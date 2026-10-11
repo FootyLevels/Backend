@@ -5,16 +5,18 @@ from pathlib import Path
 from typing import Annotated
 import uuid
 
-from fastapi import Depends, FastAPI, Header, HTTPException, Query, Request
+from fastapi import Depends, FastAPI, Header, HTTPException, Query, Request, Response
 from fastapi.responses import JSONResponse
 from firebase_admin import credentials, delete_app, initialize_app
 from google.cloud import firestore
-from pydantic import Field
+from pydantic import Field, model_validator
 
 from footylevels.authentication import (AuthenticationRejected,
     AuthenticationUnavailable, FirebaseIdentityVerifier, Identity)
-from footylevels.records import Id, Metadata
-from footylevels.repositories import FirestoreRecords, RecordConflict, RecordNotFound, RecordUnavailable
+from footylevels.model_requests import BODY_PROFILE, body_input_hash
+from footylevels.records import Id, KeyframeInput, Metadata
+from footylevels.repositories import (FirestoreRecords, RecordConflict, RecordNotFound,
+                                     RecordUnavailable, reconstruction_source)
 
 
 class CreateProject(Metadata):
@@ -25,6 +27,23 @@ class CreateProject(Metadata):
 
 class RenameProject(Metadata):
     title: str = Field(min_length=1, max_length=120)
+
+
+class ReconstructKeyframes(Metadata):
+    input_revision: int = Field(ge=1, strict=True)
+    keyframes: tuple[KeyframeInput, ...] = Field(min_length=1, max_length=24)
+
+    @model_validator(mode="after")
+    def distinct_frames(self):
+        if len({frame.frame_index for frame in self.keyframes}) != len(self.keyframes):
+            raise ValueError("Select each canonical frame only once")
+        return self
+
+
+def public_job(record):
+    """A worker lease grants publication rights and must never reach a client."""
+    return record.model_dump(mode="json", by_alias=True,
+                             exclude={"lease_token", "worker_id", "lease_expires_at"})
 
 
 def create_app(records, verifier, lifespan=None, *, assets=None, uploads=None) -> FastAPI:
@@ -122,8 +141,24 @@ def create_app(records, verifier, lifespan=None, *, assets=None, uploads=None) -
 
     @app.get("/api/jobs/{job_id}")
     def job(job_id: Id, user: Identity = Depends(active_identity)):
-        record = records.get_job(user.uid, job_id)
-        return record.model_dump(mode="json", by_alias=True, exclude={"lease_token", "worker_id", "lease_expires_at"})
+        return public_job(records.get_job(user.uid, job_id))
+
+    @app.post("/api/projects/{project_id}/reconstructions/keyframes", status_code=202)
+    def reconstruct_keyframes(project_id: Id, body: ReconstructKeyframes, response: Response,
+                              user: Identity = Depends(active_identity)):
+        project = records.get_project(user.uid, project_id)
+        media = project.prepared_media
+        if project.state != "ready" or media is None or project.input_revision != body.input_revision:
+            raise RecordConflict("Wait for prepared media or refresh the project")
+        if any(frame.frame_index >= media.frame_count for frame in body.keyframes):
+            raise HTTPException(422, "Frame index is outside prepared playback")
+        # Owner, source, processing profile and semantic identity are all server
+        # derived. The repository repeats these checks inside its transaction.
+        record = records.enqueue_reconstruction(user.uid, project_id, body.input_revision,
+            "reconstructKeyframes", body_input_hash(reconstruction_source(project), body.keyframes),
+            BODY_PROFILE, keyframes=body.keyframes)
+        response.headers["Location"] = f"/api/jobs/{record.id}"
+        return public_job(record)
 
     @app.get("/api/reconstructions/{result_id}")
     def reconstruction(result_id: Id, user: Identity = Depends(active_identity)):
@@ -131,8 +166,7 @@ def create_app(records, verifier, lifespan=None, *, assets=None, uploads=None) -
 
     @app.post("/api/jobs/{job_id}/cancel")
     def cancel_job(job_id: Id, user: Identity = Depends(active_identity)):
-        record = records.cancel_job(user.uid, job_id)
-        return record.model_dump(mode="json", by_alias=True, exclude={"lease_token", "worker_id", "lease_expires_at"})
+        return public_job(records.cancel_job(user.uid, job_id))
 
     @app.get("/api/comparisons/{comparison_id}")
     def comparison(comparison_id: Id, user: Identity = Depends(active_identity)):
