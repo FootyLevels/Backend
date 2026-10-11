@@ -56,6 +56,7 @@ def main():
     media_jobs, jobs = FirestoreMediaJobs(client), FirestoreReconstructionJobs(client)
     storage = SupabaseAssets(os.environ['SUPABASE_URL'], os.environ['SUPABASE_SECRET_KEY'])
     uid, project = 'fp53-model-'+uuid.uuid4().hex, None
+    probe_job_ids = set()
     recovery = Path.home()/'.local/share/footylevels/cloud-api/fp53-last-fixture.json'
     with recovery.open('x') as saved:
         os.chmod(recovery, 0o600)
@@ -84,6 +85,7 @@ def main():
             digest=body_input_hash(ready.prepared_media.video,frames)
             job=jobs.enqueue_reconstruction(uid,project.id,ready.input_revision,'reconstructKeyframes',digest,
                 BODY_PROFILE,keyframes=frames)
+            probe_job_ids.add(job.id)
             abandoned=jobs.claim(job.id,'fp53-abandoned-probe')
             assert abandoned and abandoned.attempt_count==1
             client.collection('jobs').document(job.id).update({'leaseExpiresAt':utc_now()-timedelta(seconds=1)})
@@ -135,6 +137,42 @@ def main():
                 'oldLeaseRejected':True,'duplicateClaimsIgnored':True,'completionReplayVerified':True,
                 'originalSourcePreserved':True,'engine':result.engine.model_dump(mode='json',by_alias=True),
                 'topologyVersion':result.contract.topology_version})
+            # Cancel a real in-flight model request. The serial GPU may finish
+            # into its private cache, but its invalidated lease cannot publish.
+            from concurrent.futures import ThreadPoolExecutor
+            from footylevels.reconstruction_worker import run_job
+            cancel_frames=[KeyframeInput(frame_index=15,bbox=(.055,.21,.64,.78))]
+            cancel_job=jobs.enqueue_reconstruction(uid,project.id,ready.input_revision,'reconstructKeyframes',
+                body_input_hash(ready.prepared_media.video,cancel_frames),BODY_PROFILE,keyframes=cancel_frames)
+            probe_job_ids.add(cancel_job.id)
+            cancel_claim=jobs.claim(cancel_job.id,'fp53-cancellation-probe')
+            assert cancel_claim
+            calls_before_cancel=health()['inferenceCalls']
+            staging=directory/'cancel-staging'
+            staging.mkdir()
+            with ThreadPoolExecutor(max_workers=1) as executor:
+                attempt=executor.submit(run_job,jobs,storage,cancel_claim,
+                    [sys.executable,str(ROOT/'infra/dgx/body_keyframes_adapter.py')],staging,
+                    heartbeat_seconds=.1,command_timeout=30)
+                deadline=time.monotonic()+15
+                observed=False
+                while not attempt.done() and time.monotonic()<deadline:
+                    if health()['inferenceCalls']>calls_before_cancel:
+                        observed=True
+                        break
+                    time.sleep(.02)
+                assert observed,'Real model inference was not observed before cancellation'
+                assert jobs.cancel_job(uid,cancel_job.id).status=='cancelled'
+                assert attempt.result(timeout=40)=='superseded'
+            deadline=time.monotonic()+190
+            while health()['activeRequests'] and time.monotonic()<deadline:
+                time.sleep(.1)
+            assert health()['activeRequests']==0
+            assert not client.collection('reconstructions').document(cancel_job.id).get().exists
+            assert jobs.get_project(uid,project.id).active_job_id is None
+            assert not list(staging.iterdir())
+            evidence.update({'realInFlightCancellationVerified':True,'cancelledResultNotPublished':True,
+                'cancelledAdapterReapedAndStagingRemoved':True,'modelQuiescentAfterCancellation':True})
     finally:
         if project:
             evidence['fixtureCleanup']=cleanup(client,media_jobs,storage,uid,project.id)
@@ -149,7 +187,7 @@ def main():
                 # New non-probe requests could arrive during this run. Restrict
                 # removal further using request identity stored by the bridge.
                 identity=path/'request.json'
-                if identity.exists() and 'job' in locals() and json.loads(identity.read_text()).get('jobId')==job.id:
+                if identity.exists() and json.loads(identity.read_text()).get('jobId') in probe_job_ids:
                     shutil.rmtree(path)
         recovery.unlink()
         client.close()
