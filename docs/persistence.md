@@ -94,3 +94,17 @@ separate 503 test preserving the production missing-checkpoint guard.
 Both development/demo owned-project indexes are applied and READY. Development
 CRUD/pagination tests and a read-only Demo library query pass using the matching
 scoped identities.
+
+## FP-16 additions
+
+Projects now also allow `label` (optional practice text, up to 80 characters) and
+`creationHash` (optional SHA-256 of the original title/source/label). Existing
+records remain valid without them. The immutable creation hash supports durable
+project creation retries even after renaming; it is not an assessment or a score.
+The API supplies no client-controlled owner/document ID. See `authentication.md`
+for the owner-scoped optional `Idempotency-Key` contract and verification.
+
+`UploadRecord` plus the project's `activeUploadId` continue to track the private
+source transfer and its quarantine/quota reservation. Uploaded and independently
+verified sources advance inputRevision exactly once and enter `preparing`; ready
+requires FP-54's trusted decoding and preparation, not an iOS declaration.

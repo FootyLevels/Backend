@@ -94,3 +94,42 @@ responses from old account generations. Debug retains the requested bundled
 example entry and team service; Release blocks the unauthenticated legacy service
 until the owned upload/model migration. See the Frontend `docs/authentication.md`
 for configuration and opt-in SDK test instructions.
+
+## FP-16: retrying project creation
+
+`POST /api/projects` accepts optional `Idempotency-Key` (16–80 URL-safe letters,
+digits, `_` or `-`) and `label` (optional, 1–80 characters). The iOS client saves
+one opaque UUID per local draft before networking and uses it both for project
+creation and that project's upload session. Firebase identity supplies ownership;
+clients cannot choose the document ID or owner.
+
+The project ID is a hash of UID/key; a Firestore transaction creates it once or
+returns the current existing record. An immutable `creationHash` of the original
+title/source/label rejects key reuse with different input (409) while preserving
+retries after a rename. A tombstoned project returns 404 and cannot be resurrected.
+Requests without the optional header retain the existing create-new behavior.
+Metadata read/commit contention is retried within a bound; exhausted transient
+errors return a sanitized 503. Signed source uploads still finalize as `preparing`,
+not `ready`; media decoding is FP-54.
+
+Checkpoint `d774d54`: 176 local tests passed (5 cloud tests skipped by default),
+a real Development Firestore concurrent creation/owner/rename/delete test passed
+and removed its fixtures, and 41 API/metadata/storage tests passed in the isolated
+DGX runtime. The private Development API on 8011 was updated to this release;
+public model API 8010/ngrok was left running.
+
+The opt-in iOS upload probe subsequently passed against this actual private DGX
+listener with real Development Firebase accounts and private Supabase TUS. It
+confirmed a 6 MiB chunk, interrupted, rebuilt its coordinator/store, resumed and
+finalized the same project, then uploaded a second recording and rejected foreign
+account access. A signed source download matched size and SHA-256. This exercises
+client state restoration; it is not a physical-phone app termination test.
+
+`scripts/cleanup_ios_upload_fixtures.py /private/path/fp16-ios-evidence.json` is a
+trusted test-only cleanup helper. Run only after the SDK test has ended. It checks
+the random invocation's temporary Auth email/UID, project title/run ID and exact
+owned upload object paths; it refuses unexpected job/result scope. The completed
+probe's two Auth accounts, two projects, two upload records, two private objects
+and two profiles were removed and absence verified. Its storage ledger returned
+to zero. This controlled quiescent-fixture cleanup does not replace production
+capability quarantine, scheduled retention or the FP-18/54 deletion workflow.
