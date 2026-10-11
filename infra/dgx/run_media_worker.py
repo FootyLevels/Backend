@@ -27,7 +27,7 @@ def reconcile(jobs, storage, cursors):
              ("assetReservations", "createdAt", utc_now() - timedelta(hours=24), jobs.cleanup_orphan_output)]
     cleaned = 0
     for collection, field, before, cleanup in plans:
-        query = jobs.client.collection(collection).where(filter=FieldFilter(field, "<=", before)).order_by(field)
+        query = jobs.client.collection(collection).where(filter=FieldFilter(field, "<=", before)).order_by(field).order_by("__name__")
         if collection in cursors:
             query = query.start_after(cursors[collection])
         snapshots = list(query.limit(10).stream())

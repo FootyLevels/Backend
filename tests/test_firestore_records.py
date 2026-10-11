@@ -81,6 +81,8 @@ def test_media_dispatch_claim_restart_and_stale_publication(cloud):
     jobs = media_jobs_fixture(client, uid)
     project, upload = preparing_project(repo, jobs, uid)
     assert project.state == "preparing" and project.active_job_id
+    assert project.id in jobs.candidates()
+    assert project.id not in jobs.candidates(after=project.id)
     assert jobs.commit_upload(uid, upload.id) == project
     with ThreadPoolExecutor(max_workers=2) as pool:
         claims = list(pool.map(lambda worker: jobs.claim(project.id, worker), ["worker-a", "worker-b"]))
@@ -111,6 +113,13 @@ def test_media_dispatch_claim_restart_and_stale_publication(cloud):
     assert published.active_job_id is None
     assert repo.get_job(uid, replacement.id).status == "succeeded"
     assert restarted.claim(project.id, "late-worker") is None
+    # The cursor remains valid after the previous project leaves preparing or
+    # is deleted. This is the deployment's second and subsequent polling cycle.
+    assert project.id not in restarted.candidates(after=project.id)
+    repo.mark_deleting(uid, project.id)
+    assert project.id not in restarted.candidates(after=project.id)
+    client.collection("projects").document(project.id).delete()
+    assert project.id not in restarted.candidates(after=project.id)
 
 
 def test_media_rejection_retry_bound_and_tombstone_fence(cloud):
@@ -177,6 +186,7 @@ def test_media_orphan_cleanup_keeps_winners_and_releases_exact_quota(cloud):
 
 
 def test_upload_maintenance_enforces_quarantine_and_releases_once(cloud):
+    from google.cloud.firestore_v1.base_query import FieldFilter
     from footylevels.repositories import RecordConflict
     repo, client, uid, _ = cloud
     jobs = media_jobs_fixture(client, uid)
@@ -199,6 +209,12 @@ def test_upload_maintenance_enforces_quarantine_and_releases_once(cloud):
     assert store.deleted == store.absent == [upload.asset]
     assert client.collection("storageUsage").document(uid).get().to_dict()["bytes"] == 0
     assert repo.get_project(uid, project.id).active_upload_id is None
+    # Reconciliation keeps a timestamp + document cursor after cleanup. Verify
+    # the actual provider query, including its document-name tie breaker.
+    snapshot = client.collection("uploads").document(upload.id).get()
+    query = client.collection("uploads").where(filter=FieldFilter("cleanupAfter", "<=", utc_now())).order_by("cleanupAfter").order_by("__name__")
+    later = list(query.start_after({"cleanupAfter": snapshot.to_dict()["cleanupAfter"], "__name__": snapshot.reference}).limit(1).stream())
+    assert all(item.id != upload.id for item in later)
 
 
 def ready_project(repo, uid):

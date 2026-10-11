@@ -18,7 +18,7 @@ class FirestoreMediaJobs(FirestoreUploads):
     def candidates(self, limit=20, after=None):
         # One existing single-field project index; no hot polling across all jobs.
         # The CLI holds a local process lock and uses a rotating document cursor.
-        query = self.client.collection("projects").where(filter=FieldFilter("state", "==", "preparing"))
+        query = self.client.collection("projects").where(filter=FieldFilter("state", "==", "preparing")).order_by("__name__")
         if after:
             query = query.start_after({"__name__": self._ref("projects", after)})
         return [snapshot.id for snapshot in query.limit(limit).stream()]
