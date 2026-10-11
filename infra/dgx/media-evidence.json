@@ -7,6 +7,18 @@
   "defaultOptInCloudTestsSkipped": 9,
   "realDgxProcessorTestsPassed": 13,
   "realFirestoreTestsPassed": 4,
+  "dgxReleaseApiMetadataProcessorTestsPassed": 56,
+  "deployment": {
+    "runtimeRevision": "b5ba27c",
+    "developmentApiHealthPassed": true,
+    "anonymousProjectRequestsStatus": 401,
+    "apiAndCpuWorkerRunningTogether": true,
+    "automaticDurableDispatchPassed": true,
+    "automaticFixtureOutputChecksumsVerified": 7,
+    "automaticFixtureCleanupAbsenceVerified": true,
+    "publicBodyRuntimeHealthy": true,
+    "publicBodyRuntimeRevision": "c865730"
+  },
   "firestoreChecks": [
     "atomic upload publication and durable media dispatch",
     "concurrent claim has one winner",
