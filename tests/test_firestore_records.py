@@ -46,6 +46,7 @@ def cloud():
             client.collection("storageUsage").document(owner).delete()
             client.collection("storageUsage").document(owner + "-usage").delete()
         client.collection("references").document(uid).delete()
+        client.collection("runtimeControls").document(uid).delete()
         client.close()
 
 
@@ -367,3 +368,144 @@ def test_durable_project_creation_retries_are_owner_scoped(cloud):
     repo.mark_deleting(uid, pid)
     with pytest.raises(RecordNotFound):
         repo.create_project(uid, 'Original', 'capture', key, 'Practice')
+
+
+def test_reconstruction_claim_heartbeat_restart_and_missed_ack(cloud):
+    from footylevels.reconstruction_jobs import FirestoreReconstructionJobs
+    from footylevels.repositories import RecordConflict
+    repo, client, uid, _ = cloud
+    project = ready_project(repo, uid)
+    job = enqueue(repo, uid, project)
+    jobs = FirestoreReconstructionJobs(client)
+    assert job.id in [s.id for s in jobs.candidates()]
+    with ThreadPoolExecutor(max_workers=2) as pool:
+        claims = list(pool.map(lambda name: jobs.claim(job.id, name), ['first', 'second']))
+    claimed = next(j for j in claims if j)
+    assert sum(j is not None for j in claims) == 1
+    heartbeat = jobs.checkpoint(claimed, 'generatingBodies')
+    assert heartbeat.heartbeat_at >= claimed.heartbeat_at
+    assert heartbeat.lease_expires_at >= claimed.lease_expires_at
+    with pytest.raises(RecordConflict):
+        jobs.checkpoint(claimed, 'downloadingInput')
+    client.collection('jobs').document(job.id).update({'leaseExpiresAt': utc_now() - timedelta(seconds=1)})
+    restarted = FirestoreReconstructionJobs(client)
+    replacement = restarted.claim(job.id, 'restarted')
+    assert replacement.attempt_count == 2 and replacement.lease_token != claimed.lease_token
+    with pytest.raises(RecordConflict):
+        jobs.checkpoint(claimed)
+    with pytest.raises(RecordConflict):
+        repo.publish_reconstruction(result_for(project, job), claimed.lease_token)
+    result = result_for(project, job)
+    asset = result.artifacts[0].model_copy(update={'object_key': result.artifacts[0].object_key.replace('/1/', '/2/')})
+    result = result.model_copy(update={'artifacts': (asset,)})
+    restarted.checkpoint(replacement, 'publishingAssets')
+    repo.publish_reconstruction(result, replacement.lease_token)
+    # The transaction committed but the worker lost its acknowledgement. An
+    # exact replay returns the immutable winner, even after its lease is cleared.
+    assert repo.publish_reconstruction(result, replacement.lease_token) == result
+    assert repo.get_job(uid, job.id).lease_token is None
+    assert restarted.claim(job.id, 'late') is None
+    assert all(s.id != job.id for s in restarted.candidates(after=job.id))
+    client.collection('jobs').document(job.id).delete()
+    assert all(s.id != job.id for s in restarted.candidates(after=job.id))
+
+
+def test_reconstruction_retry_backoff_exhaustion_and_deadlines(cloud):
+    from footylevels.reconstruction_jobs import FirestoreReconstructionJobs
+    from footylevels.repositories import RecordConflict
+    repo, client, uid, _ = cloud
+    project = ready_project(repo, uid)
+    job = enqueue(repo, uid, project)
+    jobs = FirestoreReconstructionJobs(client)
+    for attempt in range(1, 4):
+        claim = jobs.claim(job.id, 'worker')
+        assert claim.attempt_count == attempt
+        failed = jobs.fail(claim)
+        if attempt < 3:
+            assert failed.status == 'retrying' and failed.next_attempt_at > utc_now()
+            assert jobs.claim(job.id, 'too-soon') is None
+            client.collection('jobs').document(job.id).update({'nextAttemptAt': utc_now() - timedelta(seconds=1)})
+        else:
+            assert failed.status == 'failed' and failed.finished_at and failed.lease_token is None
+    assert repo.get_project(uid, project.id).active_job_id is None
+    assert jobs.claim(job.id, 'fourth') is None
+    overdue_project = ready_project(repo, uid)
+    overdue_job = enqueue(repo, uid, overdue_project)
+    overdue_claim = jobs.claim(overdue_job.id, 'worker')
+    client.collection('jobs').document(overdue_job.id).update({'attemptDeadlineAt': utc_now() - timedelta(seconds=1)})
+    with pytest.raises(RecordConflict):
+        jobs.checkpoint(overdue_claim)
+    with pytest.raises(RecordConflict):
+        repo.publish_reconstruction(result_for(overdue_project, overdue_job), overdue_claim.lease_token)
+    next_claim = jobs.claim(overdue_job.id, 'replacement')
+    assert next_claim.attempt_count == 2
+    client.collection('jobs').document(overdue_job.id).update({'deadlineAt': utc_now() - timedelta(seconds=1)})
+    assert jobs.claim(overdue_job.id, 'deadline') is None
+    assert repo.get_job(uid, overdue_job.id).error_code == 'job_deadline'
+    assert repo.get_project(uid, overdue_project.id).active_job_id is None
+
+
+def test_reconstruction_cancel_delete_and_changed_input_fences(cloud):
+    from footylevels.reconstruction_jobs import FirestoreReconstructionJobs
+    from footylevels.repositories import RecordConflict, RecordNotFound
+    repo, client, uid, other = cloud
+    jobs = FirestoreReconstructionJobs(client)
+    project = ready_project(repo, uid)
+    job = enqueue(repo, uid, project)
+    claim = jobs.claim(job.id, 'worker')
+    with pytest.raises(RecordNotFound):
+        repo.cancel_job(other, job.id)
+    cancelled = repo.cancel_job(uid, job.id)
+    assert cancelled.status == 'cancelled' and cancelled.lease_token is None
+    assert repo.cancel_job(uid, job.id) == cancelled
+    assert repo.get_project(uid, project.id).active_job_id is None
+    with pytest.raises(RecordConflict):
+        jobs.checkpoint(claim)
+    with pytest.raises(RecordConflict):
+        repo.publish_reconstruction(result_for(project, job), claim.lease_token)
+    assert jobs.claim(job.id, 'late') is None
+    for mutation in ['delete', 'revision', 'physical-delete']:
+        p = ready_project(repo, uid)
+        j = enqueue(repo, uid, p)
+        c = jobs.claim(j.id, 'worker')
+        if mutation == 'delete':
+            repo.mark_deleting(uid, p.id)
+        elif mutation == 'revision':
+            client.collection('projects').document(p.id).update({'inputRevision': p.input_revision + 1})
+        else:
+            client.collection('projects').document(p.id).delete()
+        assert jobs.claim(j.id, 'late') is None
+        assert client.collection('jobs').document(j.id).get().to_dict()['status'] == 'cancelled'
+        with pytest.raises((RecordConflict, RecordNotFound)):
+            jobs.checkpoint(c)
+        assert not client.collection('reconstructions').document(j.id).get().exists
+
+
+def test_reconstruction_pins_canonical_media_and_operator_pause(cloud):
+    from footylevels.repositories import FirestoreRecords, RecordUnavailable
+    from footylevels.reconstruction_jobs import FirestoreReconstructionJobs
+    repo, client, uid, _ = cloud
+    media_jobs = media_jobs_fixture(client, uid)
+    p, _ = preparing_project(repo, media_jobs, uid)
+    media_claim = media_jobs.claim(p.id, 'media-worker')
+    media = media_result(media_claim)
+    media_jobs.reserve_outputs(media_claim, [media.video, media.previews[0].asset])
+    project = media_jobs.publish(media_claim, media)
+    class ScopedRecords(FirestoreRecords):
+        def _reconstruction_control(self):
+            return self._ref('runtimeControls', uid)
+    records = ScopedRecords(client)
+    job = enqueue(records, uid, project)
+    assert job.source_asset == media.video and job.source_asset != project.video
+    control = client.collection('runtimeControls').document(uid)
+    control.set({'acceptingRequests': False})
+    assert enqueue(records, uid, project).id == job.id
+    another = ready_project(repo, uid)
+    with pytest.raises(RecordUnavailable):
+        enqueue(records, uid, another)
+    claim = FirestoreReconstructionJobs(client).claim(job.id, 'worker')
+    assert claim is not None  # pause rejects new requests, drains existing jobs
+    published = records.publish_reconstruction(result_for(project, job), claim.lease_token)
+    assert published.source_asset == media.video
+    control.set({'acceptingRequests': True})
+    assert enqueue(records, uid, another).status == 'queued'

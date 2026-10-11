@@ -132,7 +132,11 @@ class JobRecord(Record):
     worker_id: Id | None = None
     reconstruction_id: Id | None = None
     finished_at: AwareDatetime | None = None
-    error_code: Literal["invalid_media", "unsupported_media", "source_file_limit", "prepared_file_limit", "processing_limit", "preparation_unavailable"] | None = None
+    heartbeat_at: AwareDatetime | None = None
+    attempt_deadline_at: AwareDatetime | None = None
+    deadline_at: AwareDatetime | None = None
+    next_attempt_at: AwareDatetime | None = None
+    error_code: Literal["invalid_media", "unsupported_media", "source_file_limit", "prepared_file_limit", "processing_limit", "preparation_unavailable", "model_unavailable", "reconstruction_failed", "job_deadline", "input_changed"] | None = None
 
 
 class Engine(Metadata):

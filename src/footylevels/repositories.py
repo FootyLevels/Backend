@@ -4,7 +4,7 @@ No HTTP routes, model loading or blob access is implemented here. FP-14 connects
 this boundary to authenticated requests; FP-53 implements runner claims/recovery.
 """
 import base64
-from datetime import datetime
+from datetime import datetime, timedelta
 import hashlib
 import json
 import re
@@ -32,6 +32,11 @@ class RecordUnavailable(Exception):
     """A bounded metadata operation exhausted its transient retries."""
 
 
+def reconstruction_source(project: ProjectRecord) -> AssetRef | None:
+    """Pin canonical playback when available; keep trusted legacy fixtures usable."""
+    return project.prepared_media.video if project.prepared_media else project.video
+
+
 class RecordsRepository(Protocol):
     def get_user(self, uid: str) -> UserRecord: ...
     def bootstrap_user(self, uid: str, display_name: str) -> UserRecord: ...
@@ -46,6 +51,7 @@ class RecordsRepository(Protocol):
     def set_source(self, uid: str, project_id: str, source: AssetRef, expected_revision: int) -> ProjectRecord: ...
     def mark_deleting(self, uid: str, project_id: str) -> ProjectRecord: ...
     def get_job(self, uid: str, job_id: str) -> JobRecord: ...
+    def cancel_job(self, uid: str, job_id: str) -> JobRecord: ...
     def get_reconstruction(self, uid: str, reconstruction_id: str) -> ReconstructionRecord: ...
     def create_reference(self, reference: ReferenceRecord) -> ReferenceRecord: ...
     def get_reference(self, reference_id: str, version: str) -> ReferenceRecord: ...
@@ -222,13 +228,16 @@ class FirestoreRecords:
                                                   "updatedAt": now, "activeJobId": None, "activeUploadId": None})
             transaction.set(ref, record.document())
             if job and job.status in ACTIVE_JOBS:
-                transaction.update(job_ref, {"status": "cancelled", "finishedAt": now, "updatedAt": now})
+                transaction.update(job_ref, {"status": "cancelled", "stage": "cancelled", "finishedAt": now,
+                    "updatedAt": now, "leaseToken": None, "leaseExpiresAt": None, "nextAttemptAt": None})
             return record
 
         return delete(self.client.transaction())
 
     def enqueue_reconstruction(self, uid: str, project_id: str, input_revision: int,
                                kind: str, input_hash: str, profile_version: str) -> JobRecord:
+        if kind not in {"reconstructKeyframes", "reconstructMotion"}:
+            raise ValueError("Expected a reconstruction job")
         # Semantic deduplication survives a restart and concurrent duplicate requests.
         key = json.dumps([uid, project_id, input_revision, kind, input_hash, profile_version], separators=(",", ":"))
         job_id = hashlib.sha256(key.encode()).hexdigest()
@@ -238,24 +247,54 @@ class FirestoreRecords:
         def enqueue(transaction):
             project = self._owned(self._record(project_ref.get(transaction=transaction), ProjectRecord), uid)
             snapshot = job_ref.get(transaction=transaction)
+            control = self._reconstruction_control().get(transaction=transaction)
             if project.input_revision != input_revision or project.state != "ready" or project.video is None:
                 raise RecordConflict("Reconstruction input is stale or unavailable")
             if snapshot.exists:
                 return self._owned(self._record(snapshot, JobRecord), uid)
+            if control.exists and control.to_dict().get("acceptingRequests") is False:
+                raise RecordUnavailable()
             if project.active_job_id:
                 raise RecordConflict("Another reconstruction is active")
             record = JobRecord(id=job_id, owner_id=uid, project_id=project_id, input_revision=input_revision,
-                               input_hash=input_hash, kind=kind, profile_version=profile_version, source_asset=project.video)
+                               input_hash=input_hash, kind=kind, profile_version=profile_version,
+                               source_asset=reconstruction_source(project), deadline_at=utc_now() + timedelta(hours=24))
             transaction.create(job_ref, record.document())
             transaction.update(project_ref, {"activeJobId": job_id, "updatedAt": record.created_at})
             return record
 
         return enqueue(self.client.transaction())
 
+    def _reconstruction_control(self):
+        return self._ref("runtimeControls", "reconstruction")
+
     def get_job(self, uid: str, job_id: str) -> JobRecord:
         job = self._owned(self._record(self._ref("jobs", job_id).get(), JobRecord), uid)
         self.get_project(uid, job.project_id)
         return job
+
+    def cancel_job(self, uid: str, job_id: str) -> JobRecord:
+        job_ref = self._ref("jobs", job_id)
+        @firestore.transactional
+        def cancel(transaction):
+            job = self._owned(self._record(job_ref.get(transaction=transaction), JobRecord), uid)
+            project_ref = self._ref("projects", job.project_id)
+            project = self._owned(self._record(project_ref.get(transaction=transaction), ProjectRecord), uid)
+            if job.kind == "prepareMedia":
+                raise RecordConflict("Cancel media preparation by deleting its project")
+            if job.status not in ACTIVE_JOBS:
+                return job
+            now = utc_now()
+            cancelled = job.model_copy(update={"status": "cancelled", "stage": "cancelled", "finished_at": now,
+                "updated_at": now, "lease_token": None, "lease_expires_at": None, "next_attempt_at": None})
+            transaction.set(job_ref, cancelled.document())
+            if project.active_job_id == job.id:
+                transaction.update(project_ref, {"activeJobId": None, "updatedAt": now})
+            return cancelled
+        try:
+            return cancel(self.client.transaction())
+        except (exceptions.ServiceUnavailable, exceptions.DeadlineExceeded):
+            raise RecordUnavailable() from None
 
     def publish_reconstruction(self, result: ReconstructionRecord, lease_token: str) -> ReconstructionRecord:
         # Results use the job ID as their immutable ID; retries cannot create new winners.
@@ -272,7 +311,7 @@ class FirestoreRecords:
             snapshot = result_ref.get(transaction=transaction)
             if (job.owner_id, job.project_id, job.input_revision, job.source_asset, job.profile_version) != (result.owner_id, result.project_id, result.input_revision, result.source_asset, result.profile_version):
                 raise RecordConflict("Result provenance does not match the job")
-            if project.input_revision != result.input_revision or project.video != result.source_asset:
+            if project.input_revision != result.input_revision or reconstruction_source(project) != result.source_asset:
                 raise RecordConflict("Result input revision is obsolete")
             if snapshot.exists:
                 existing = self._record(snapshot, ReconstructionRecord)
@@ -280,8 +319,10 @@ class FirestoreRecords:
                     raise RecordConflict("Published output is immutable")
                 return existing
             now = utc_now()
-            if (job.status != "running" or job.attempt_count < 1 or not lease_token or job.lease_token != lease_token
+            if (job.kind == "prepareMedia" or job.status != "running" or job.attempt_count < 1 or not lease_token or job.lease_token != lease_token
                     or job.lease_expires_at is None or job.lease_expires_at <= now
+                    or (job.attempt_deadline_at is not None and job.attempt_deadline_at <= now)
+                    or (job.deadline_at is not None and job.deadline_at <= now)
                     or project.active_job_id != job.id):
                 raise RecordConflict("Worker lease is stale or cancelled")
             expected_mode = "motion" if job.kind == "reconstructMotion" else "keyframes"
@@ -290,7 +331,9 @@ class FirestoreRecords:
                 raise RecordConflict("Result mode or attempt asset paths do not match the job")
             transaction.create(result_ref, result.document())
             transaction.update(job_ref, {"status": "succeeded" if result.outcome == "ready" else "partial",
-                                        "reconstructionId": result.id, "finishedAt": now, "updatedAt": now})
+                                        "reconstructionId": result.id, "finishedAt": now, "updatedAt": now,
+                                        "stage": "ready" if result.outcome == "ready" else "partial",
+                                        "leaseToken": None, "leaseExpiresAt": None, "nextAttemptAt": None})
             transaction.update(project_ref, {"latestReconstructionId": result.id, "activeJobId": None, "updatedAt": now})
             return result
 

@@ -129,6 +129,11 @@ def create_app(records, verifier, lifespan=None, *, assets=None, uploads=None) -
     def reconstruction(result_id: Id, user: Identity = Depends(active_identity)):
         return records.get_reconstruction(user.uid, result_id)
 
+    @app.post("/api/jobs/{job_id}/cancel")
+    def cancel_job(job_id: Id, user: Identity = Depends(active_identity)):
+        record = records.cancel_job(user.uid, job_id)
+        return record.model_dump(mode="json", by_alias=True, exclude={"lease_token", "worker_id", "lease_expires_at"})
+
     @app.get("/api/comparisons/{comparison_id}")
     def comparison(comparison_id: Id, user: Identity = Depends(active_identity)):
         return records.get_comparison(user.uid, comparison_id)

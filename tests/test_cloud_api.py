@@ -67,6 +67,9 @@ class TestRecords:
     get_reconstruction = get_project
     get_comparison = get_project
 
+    def cancel_job(self, uid, identifier):
+        return self.get_job(uid, identifier)
+
 
 class Verifier:
     def verify(self, token):
@@ -109,6 +112,8 @@ def test_foreign_owner_cannot_read_rename_delete_or_list(setup):
     assert client.delete(f"/api/projects/{identifier}", headers=headers("bob")).status_code == 404
     assert client.get("/api/projects", headers=headers("bob")).json()["items"] == []
     assert client.get(f"/api/jobs/{identifier}", headers=headers("alice")).json() == {"id": identifier}
+    assert client.post(f"/api/jobs/{identifier}/cancel", headers=headers("bob")).status_code == 404
+    assert client.post(f"/api/jobs/{identifier}/cancel", headers=headers("alice")).json() == {"id": identifier}
     assert client.delete(f"/api/projects/{identifier}", headers=headers("alice")).status_code == 202
     assert client.get(f"/api/projects/{identifier}", headers=headers("alice")).status_code == 404
 
