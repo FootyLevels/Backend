@@ -5,28 +5,31 @@ Wraps Meta's SAM 3D Body (MHR) to turn skill footage into per-frame 3D body
 reconstructions.
 """
 
-from .body_extractor import (
-    BodyDetection,
-    BodyFrame,
-    BodySequence,
-    SAM3DBodyExtractor,
-    extract_bodies,
-    resolve_device,
-)
-from .catalog import SkillCatalog
-from .mesh import orient_y_up, write_mesh, write_obj, write_ply
-from .reconstruct import ImageReconstructor, ReconstructionError
-from .metrics import (
-    calculate_angle_2vectors,
-    calculate_angle_3points,
-    calculate_angular_velocity,
-    calculate_distance,
-    calculate_velocity,
-)
-from .storage import SequenceStorage, save_sequence
-from .usdz import write_usdz, write_usdz_animation
-from .video_processor import VideoInfo, VideoProcessor
-from .visualizer import BodyVisualizer
+from importlib import import_module
+
+# Keep metadata/authentication processes independent of the GPU/media stack,
+# while preserving the semester package's public imports for existing callers.
+_MODULE_EXPORTS = {
+    "body_extractor": ("BodyDetection", "BodyFrame", "BodySequence", "SAM3DBodyExtractor", "extract_bodies", "resolve_device"),
+    "catalog": ("SkillCatalog",),
+    "mesh": ("orient_y_up", "write_mesh", "write_obj", "write_ply"),
+    "reconstruct": ("ImageReconstructor", "ReconstructionError"),
+    "metrics": ("calculate_angle_2vectors", "calculate_angle_3points", "calculate_angular_velocity", "calculate_distance", "calculate_velocity"),
+    "storage": ("SequenceStorage", "save_sequence"),
+    "usdz": ("write_usdz", "write_usdz_animation"),
+    "video_processor": ("VideoInfo", "VideoProcessor"),
+    "visualizer": ("BodyVisualizer",),
+}
+
+
+def __getattr__(name):
+    for module, exports in _MODULE_EXPORTS.items():
+        if name in exports:
+            value = getattr(import_module("." + module, __name__), name)
+            globals()[name] = value
+            return value
+    raise AttributeError(name)
+
 
 __version__ = "0.2.0"
 __all__ = [

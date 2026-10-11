@@ -139,9 +139,15 @@ def app_factory() -> FastAPI:
     from footylevels.assets import SupabaseAssets
     storage = SupabaseAssets(os.environ["SUPABASE_URL"], os.environ["SUPABASE_SECRET_KEY"])
     project = os.environ["FIREBASE_PROJECT_ID"]
+    environments = {
+        "footylevels-dev-20261009": ("dev", "https://bwzxrvkxfubnmuieljoj.supabase.co"),
+        "footylevels-demo-20261009": ("demo", "https://skzgjwbkadiazfvuhtts.supabase.co"),
+    }
+    if project not in environments or os.environ["SUPABASE_URL"] != environments[project][1]:
+        raise ValueError("Firebase and storage environments must match")
     filename = Path(os.environ["GOOGLE_APPLICATION_CREDENTIALS"])
     credential = credentials.Certificate(str(filename))
-    if credential.project_id != project:
+    if credential.project_id != project or credential.service_account_email != f"footylevels-api-{environments[project][0]}@{project}.iam.gserviceaccount.com":
         raise ValueError("Firebase and runtime credential projects must match")
     firebase = initialize_app(credential, {"projectId": project, "httpTimeout": 15},
                               name="footylevels-" + uuid.uuid4().hex)

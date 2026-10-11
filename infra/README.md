@@ -182,3 +182,7 @@ existing API use those providers; that integration belongs to the implementation
 FP-50 foundation resources and access are verified. FP-53/54/55 have been reconciled
 with Firestore dispatch and one DGX deployment; no paid services are selected.
 The complete application generation/login/playback flow remains implementation work.
+
+## Private assets (FP-17)
+
+See [the private upload/asset contract](supabase/private-assets.md) for authenticated resumable Supabase uploads, source finalization, signed output maps, free storage budgets and delayed cleanup. The DGX authenticated development API uses private loopback port 8011 until model route integration.

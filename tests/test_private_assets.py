@@ -192,3 +192,27 @@ def test_signed_response_cannot_redirect_or_sign_another_object(raw):
                      byte_size=12, content_type='video/mp4')
     store._request = lambda *a, **k: Response(body={'signedURL': raw})
     with pytest.raises(StorageUnavailable): store.signed_read(asset)
+
+
+def test_restricted_account_and_storage_failures_never_issue_capabilities(setup):
+    c, records, uploads, assets, pid = setup
+    records.users['alice'] = records.users['alice'].model_copy(update={'account_state': 'restricted'})
+    assert begin(c, pid).status_code == 403 and not assets.grants
+    records.users['alice'] = records.users['alice'].model_copy(update={'account_state': 'active'})
+    uid = begin(c, pid).json()['id']
+    def unavailable(asset): raise StorageUnavailable()
+    assets.verify = unavailable
+    assert c.post(f'/api/uploads/{uid}/finalize', headers=headers('alice')).status_code == 503
+    assert records.projects[pid].video is None
+    from footylevels.uploads import StorageQuotaExceeded
+    def full(*args): raise StorageQuotaExceeded()
+    uploads.begin = full
+    assert begin(c, pid).status_code == 429
+
+
+def test_deletion_during_verification_cannot_publish(setup):
+    c, records, uploads, assets, pid = setup
+    uid = begin(c, pid).json()['id']
+    assets.verify = lambda asset: records.mark_deleting('alice', pid)
+    assert c.post(f'/api/uploads/{uid}/finalize', headers=headers('alice')).status_code == 404
+    assert records.projects[pid].video is None

@@ -22,7 +22,7 @@ class SupabaseAssets:
             raise ValueError("Explicit Supabase project URL and server secret required")
         self.root = url + "/storage/v1"
         self.url = url
-        self.tus_url = url.replace(".supabase.co", ".storage.supabase.co") + "/storage/v1/upload/resumable"
+        self.tus_url = url.replace(".supabase.co", ".storage.supabase.co") + "/storage/v1/upload/resumable/sign"
         self._secret = secret
 
     def _request(self, method, path, **kwargs):
@@ -113,4 +113,9 @@ class SupabaseAssets:
     def delete_exact(self, asset: AssetRef):
         with self._request("DELETE", "/object/" + asset.bucket, json={"prefixes": [asset.object_key]}) as response:
             if response.status_code != 200:
+                raise StorageUnavailable()
+
+    def verify_absent(self, asset: AssetRef):
+        with self._request("GET", "/object/authenticated/" + self._path(asset), stream=True) as response:
+            if response.status_code not in (400, 404):
                 raise StorageUnavailable()

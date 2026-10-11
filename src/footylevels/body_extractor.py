@@ -335,6 +335,17 @@ class SAM3DBodyExtractor:
         dependency, a bad checkpoint — is allowed to propagate as itself rather
         than being reported as a missing entry point.
         """
+        if self.hf_repo_id is None:
+            missing = self.check_checkpoint()
+            if missing:
+                raise FileNotFoundError(
+                    f"SAM 3D Body checkpoint incomplete in {self.checkpoint_dir}.\n"
+                    f"Missing: {', '.join(missing)}\n"
+                    f"Download it with:\n"
+                    f"  hf download {DEFAULT_HF_REPO_ID} --local-dir {self.checkpoint_dir}\n"
+                    f"(requires accepting the gated licence on Hugging Face first)"
+                )
+
         try:
             import sam_3d_body  # noqa: F401
         except ImportError as exc:
@@ -350,16 +361,6 @@ class SAM3DBodyExtractor:
         if self.hf_repo_id is not None:
             model, model_cfg = load_sam_3d_body_hf(self.hf_repo_id, device=self.device)
         else:
-            missing = self.check_checkpoint()
-            if missing:
-                raise FileNotFoundError(
-                    f"SAM 3D Body checkpoint incomplete in {self.checkpoint_dir}.\n"
-                    f"Missing: {', '.join(missing)}\n"
-                    f"Download it with:\n"
-                    f"  hf download {DEFAULT_HF_REPO_ID} --local-dir {self.checkpoint_dir}\n"
-                    f"(requires accepting the gated licence on Hugging Face first)"
-                )
-
             model, model_cfg = load_sam_3d_body(
                 str(self.checkpoint_path),
                 device=self.device,
