@@ -18,6 +18,13 @@ vendor/
 # Extracted body sequences and generated meshes
 data/sequences/
 data/output/
+runtime/skill_lab/data/
+runtime/skill_lab/.venv*/
+runtime/skill_lab/vendor/
+runtime/skill_lab/checkpoints/
+runtime/skill_lab/.media/
+runtime/skill_lab/*.log
+runtime/skill_lab/*.pid
 
 # macOS
 .DS_Store
