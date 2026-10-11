@@ -45,7 +45,7 @@ class AssetRef(Metadata):
 
     @model_validator(mode="after")
     def valid_path(self):
-        if self.object_key.startswith("/") or any(c in self.object_key for c in [":", "?", "#", "\\"]):
+        if any(ord(c) < 32 or ord(c) == 127 for c in self.object_key) or "%" in self.object_key or self.object_key.startswith("/") or any(c in self.object_key for c in [":", "?", "#", "\\"]):
             raise ValueError("Store an object key, never a URL or capability")
         if any(part in {"", ".", ".."} for part in self.object_key.split("/")):
             raise ValueError("Invalid object path")
@@ -66,6 +66,7 @@ class ProjectRecord(Record):
     input_revision: int = Field(default=1, ge=1)
     video: AssetRef | None = None
     active_job_id: Id | None = None
+    active_upload_id: Id | None = None
     latest_reconstruction_id: Id | None = None
     deleted_at: AwareDatetime | None = None
 
@@ -168,3 +169,15 @@ class ComparisonRecord(Record):
         if (self.right_type == "reference") != (self.right_reference_version is not None):
             raise ValueError("Pin a version only when comparing with a reference")
         return self
+
+
+class UploadRecord(Record):
+    owner_id: Id
+    project_id: Id
+    expected_revision: int = Field(ge=1)
+    asset: AssetRef
+    status: Literal["uploading", "committed", "cancelled"] = "uploading"
+    expires_at: AwareDatetime
+    cleanup_after: AwareDatetime
+    committed_revision: int | None = Field(default=None, ge=2)
+    reserved_bytes: int = Field(default=52428800, ge=0, le=52428800)

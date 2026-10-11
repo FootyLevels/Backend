@@ -150,7 +150,7 @@ class FirestoreRecords:
         @firestore.transactional
         def change(transaction):
             existing = self._owned(self._record(ref.get(transaction=transaction), ProjectRecord), uid)
-            if existing.input_revision != expected_revision or existing.active_job_id:
+            if existing.input_revision != expected_revision or existing.active_job_id or existing.active_upload_id:
                 raise RecordConflict("Input changed or a job is active")
             prefix = f"users/{uid}/projects/{project_id}/source/"
             if source.bucket != "private-media" or not source.object_key.startswith(prefix):
@@ -179,7 +179,7 @@ class FirestoreRecords:
                 raise RecordConflict("Active job does not belong to the project")
             now = utc_now()
             record = ProjectRecord.model_validate({**existing.document(), "state": "deleting", "deletedAt": now,
-                                                  "updatedAt": now, "activeJobId": None})
+                                                  "updatedAt": now, "activeJobId": None, "activeUploadId": None})
             transaction.set(ref, record.document())
             if job and job.status in ACTIVE_JOBS:
                 transaction.update(job_ref, {"status": "cancelled", "finishedAt": now, "updatedAt": now})

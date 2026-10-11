@@ -26,7 +26,7 @@ class RenameProject(Metadata):
     title: str = Field(min_length=1, max_length=120)
 
 
-def create_app(records, verifier, lifespan=None) -> FastAPI:
+def create_app(records, verifier, lifespan=None, *, assets=None, uploads=None) -> FastAPI:
     app = FastAPI(title="FootyLevels", version="0.3.0", lifespan=lifespan)
 
     @app.middleware("http")
@@ -126,11 +126,18 @@ def create_app(records, verifier, lifespan=None) -> FastAPI:
     def comparison(comparison_id: Id, user: Identity = Depends(active_identity)):
         return records.get_comparison(user.uid, comparison_id)
 
+    if assets is not None:
+        from api.assets import attach_assets
+        from footylevels.uploads import FirestoreUploads
+        attach_assets(app, records, uploads or FirestoreUploads(records.client), assets, active_identity)
+
     return app
 
 
 def app_factory() -> FastAPI:
     """uvicorn api.cloud:app_factory --factory; requires explicit scoped credentials."""
+    from footylevels.assets import SupabaseAssets
+    storage = SupabaseAssets(os.environ["SUPABASE_URL"], os.environ["SUPABASE_SECRET_KEY"])
     project = os.environ["FIREBASE_PROJECT_ID"]
     filename = Path(os.environ["GOOGLE_APPLICATION_CREDENTIALS"])
     credential = credentials.Certificate(str(filename))
@@ -153,4 +160,4 @@ def app_factory() -> FastAPI:
             client.close()
             delete_app(firebase)
 
-    return create_app(FirestoreRecords(client), verifier, lifespan)
+    return create_app(FirestoreRecords(client), verifier, lifespan, assets=storage)
