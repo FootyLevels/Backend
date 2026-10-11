@@ -509,3 +509,65 @@ def test_reconstruction_pins_canonical_media_and_operator_pause(cloud):
     assert published.source_asset == media.video
     control.set({'acceptingRequests': True})
     assert enqueue(records, uid, another).status == 'queued'
+
+
+def test_reconstruction_serial_runner_with_real_firestore_and_isolated_quota(cloud, tmp_path):
+    from footylevels.reconstruction_jobs import FirestoreReconstructionJobs
+    from footylevels.reconstruction_worker import run_job
+    from tests.test_reconstruction_worker import adapter, Storage
+    repo, client, uid, _ = cloud
+    class ScopedJobs(FirestoreReconstructionJobs):
+        def _ledgers(self, owner):
+            return self._ref('storageUsage', uid), self._ref('storageUsage', uid + '-usage')
+    jobs = ScopedJobs(client)
+    project = ready_project(repo, uid)
+    job = enqueue(repo, uid, project)
+    claim = jobs.claim(job.id, 'runner-fixture')
+    command, root = adapter(tmp_path)
+    storage = Storage()
+    assert run_job(jobs, storage, claim, command, root) == 'ready'
+    persisted = repo.get_job(uid, job.id)
+    assert persisted.status == 'succeeded' and persisted.stage == 'ready' and persisted.lease_token is None
+    result = repo.get_reconstruction(uid, job.id)
+    assert result.source_asset == project.video
+    assert tuple(storage.uploaded) == tuple(storage.verified) == result.artifacts
+    assert repo.get_project(uid, project.id).latest_reconstruction_id == job.id
+    assert client.collection('storageUsage').document(uid).get().to_dict()['bytes'] == len(b'fixture-mesh')
+    assert not jobs.claim(job.id, 'duplicate')
+    assert list(root.iterdir()) == []
+
+
+def test_reconstruction_orphan_outputs_keep_immutable_winner(cloud):
+    import hashlib
+    from footylevels.reconstruction_jobs import FirestoreReconstructionJobs
+    from footylevels.repositories import RecordConflict
+    repo, client, uid, _ = cloud
+    class ScopedJobs(FirestoreReconstructionJobs):
+        def _ledgers(self, owner):
+            return self._ref('storageUsage', uid), self._ref('storageUsage', uid + '-usage')
+    jobs = ScopedJobs(client)
+    project = ready_project(repo, uid)
+    job = enqueue(repo, uid, project)
+    first = jobs.claim(job.id, 'interrupted')
+    old_result = result_for(project, job)
+    jobs.reserve_outputs(first, old_result.artifacts)
+    client.collection('jobs').document(job.id).update({'leaseExpiresAt': utc_now() - timedelta(seconds=1)})
+    second = jobs.claim(job.id, 'replacement')
+    winner_asset = old_result.artifacts[0].model_copy(update={'object_key': old_result.artifacts[0].object_key.replace('/1/', '/2/')})
+    winner = old_result.model_copy(update={'artifacts': (winner_asset,)})
+    jobs.reserve_outputs(second, winner.artifacts)
+    jobs.publish_reconstruction(winner, second.lease_token)
+    class Store:
+        deleted = []
+        def delete_exact(self, asset): self.deleted.append(asset)
+        def verify_absent(self, asset): assert asset in self.deleted
+    store = Store()
+    for asset in [old_result.artifacts[0], winner_asset]:
+        identifier = hashlib.sha256(asset.object_key.encode()).hexdigest()
+        client.collection('assetReservations').document(identifier).update({'createdAt': utc_now() - timedelta(hours=25)})
+        if asset == winner_asset:
+            with pytest.raises(RecordConflict): jobs.cleanup_orphan_output(identifier, store)
+        else:
+            jobs.cleanup_orphan_output(identifier, store)
+    assert store.deleted == list(old_result.artifacts)
+    assert client.collection('storageUsage').document(uid).get().to_dict()['bytes'] == winner_asset.byte_size

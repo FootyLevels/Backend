@@ -14,6 +14,8 @@ from .uploads import FirestoreUploads, StorageQuotaExceeded
 
 class FirestoreMediaJobs(FirestoreUploads):
     LEASE_SECONDS = 900
+    OUTPUT_LIMIT = 7
+    OUTPUT_DIRECTORY = "media"
 
     def candidates(self, limit=20, after=None):
         # One existing single-field project index; no hot polling across all jobs.
@@ -89,8 +91,8 @@ class FirestoreMediaJobs(FirestoreUploads):
         return self._run(checkpoint)
 
     def reserve_outputs(self, job, assets):
-        prefix = f"users/{job.owner_id}/projects/{job.project_id}/media/{job.id}/{job.attempt_count}/"
-        if (not 1 <= len(assets) <= 7 or len({a.object_key for a in assets}) != len(assets)
+        prefix = f"users/{job.owner_id}/projects/{job.project_id}/{self.OUTPUT_DIRECTORY}/{job.id}/{job.attempt_count}/"
+        if (not 1 <= len(assets) <= self.OUTPUT_LIMIT or len({a.object_key for a in assets}) != len(assets)
                 or any(a.bucket != "private-media" or not a.object_key.startswith(prefix) for a in assets)):
             raise RecordConflict("Media outputs must belong to this attempt")
         reservations = [(self._ref("assetReservations", hashlib.sha256(a.object_key.encode()).hexdigest()), a) for a in assets]
@@ -106,6 +108,8 @@ class FirestoreMediaJobs(FirestoreUploads):
                     raw = snapshot.to_dict()
                     if raw["asset"] != asset.document() or raw.get("jobId") != job.id or raw.get("attempt") != job.attempt_count:
                         raise RecordConflict("Reserved output is immutable")
+                    if raw.get("bytes") != asset.byte_size:
+                        raise RecordConflict("Reserved output has already been retired")
                 else:
                     additional += asset.byte_size
             if counts[0] + additional > self.GLOBAL_LIMIT or counts[1] + additional > self.USER_LIMIT:
@@ -159,7 +163,7 @@ class FirestoreMediaJobs(FirestoreUploads):
 
     def cleanup_orphan_output(self, identifier, storage):
         """Trusted reconciliation after a 24h writer grace; never a player route."""
-        from .records import AssetRef
+        from .records import AssetRef, ReconstructionRecord
         ref = self._ref("assetReservations", identifier)
         @firestore.transactional
         def fence(transaction):
@@ -172,12 +176,16 @@ class FirestoreMediaJobs(FirestoreUploads):
             asset = AssetRef.model_validate(raw["asset"])
             job = self._record(self._ref("jobs", raw["jobId"]).get(transaction=transaction), JobRecord)
             project = self._record(self._ref("projects", raw["projectId"]).get(transaction=transaction), ProjectRecord)
-            prefix = f"users/{raw['ownerId']}/projects/{project.id}/media/{job.id}/{raw['attempt']}/"
-            if (job.kind != "prepareMedia" or job.owner_id != raw["ownerId"] or job.project_id != project.id
+            directory = "media" if job.kind == "prepareMedia" else "reconstruction"
+            prefix = f"users/{raw['ownerId']}/projects/{project.id}/{directory}/{job.id}/{raw['attempt']}/"
+            if (job.owner_id != raw["ownerId"] or job.project_id != project.id
                     or project.owner_id != raw["ownerId"] or not asset.object_key.startswith(prefix)):
                 raise RecordConflict("Output provenance mismatch")
             published = [] if not project.prepared_media else [project.prepared_media.video,
                                                               *[p.asset for p in project.prepared_media.previews]]
+            if job.kind != "prepareMedia":
+                result_snapshot = self._ref("reconstructions", job.id).get(transaction=transaction)
+                published = self._record(result_snapshot, ReconstructionRecord).artifacts if result_snapshot.exists else []
             if asset in published or (job.status == "running" and job.attempt_count == raw["attempt"]
                                       and job.lease_expires_at and job.lease_expires_at > utc_now()):
                 raise RecordConflict("Output is published or an active worker owns it")

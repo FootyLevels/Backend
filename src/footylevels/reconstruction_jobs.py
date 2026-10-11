@@ -7,12 +7,14 @@ from google.cloud.firestore_v1.base_query import FieldFilter
 
 from .records import JobRecord, ProjectRecord, utc_now
 from .repositories import ACTIVE_JOBS, RecordConflict, reconstruction_source
-from .uploads import FirestoreUploads
+from .media_jobs import FirestoreMediaJobs
 
 
-class FirestoreReconstructionJobs(FirestoreUploads):
+class FirestoreReconstructionJobs(FirestoreMediaJobs):
     LEASE_SECONDS = 300
     ATTEMPT_SECONDS = 3600
+    OUTPUT_LIMIT = 32
+    OUTPUT_DIRECTORY = "reconstruction"
     STAGES = {"downloadingInput": 0, "generatingBodies": 1, "packingAssets": 2, "publishingAssets": 3}
 
     def candidates(self, limit=10, after=None):
