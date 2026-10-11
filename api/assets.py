@@ -1,5 +1,6 @@
 """Owned source upload and allowlisted private asset capabilities."""
 from datetime import timedelta
+import re
 from typing import Annotated, Literal
 
 from fastapi import APIRouter, Depends, Header, HTTPException
@@ -98,6 +99,32 @@ def asset_router(records, uploads, assets, active_identity):
         signed = {name: {"url": assets.signed_read(asset), "sha256": asset.sha256,
                          "byteSize": asset.byte_size, "contentType": asset.content_type} for name, asset in mapping.items()}
         if records.get_reconstruction(user.uid, result_id) != result:
+            raise RecordConflict()
+        return {"expiresAt": utc_now() + timedelta(seconds=300), "assets": signed}
+
+    @router.post("/api/projects/{project_id}/media-assets")
+    def prepared_assets(project_id: Id, user=Depends(active_identity)):
+        project = records.get_project(user.uid, project_id)
+        media = project.prepared_media
+        if project.state != "ready" or media is None:
+            raise RecordNotFound()
+        prefix = f"users/{user.uid}/projects/{project_id}/media/"
+        mapping = {"video": media.video, **{f"preview-{i:02d}": p.asset for i, p in enumerate(media.previews)}}
+        parent = None
+        for name, asset in mapping.items():
+            if asset.bucket != "private-media" or not asset.object_key.startswith(prefix):
+                raise RecordConflict()
+            suffix = asset.object_key[len(prefix):].split("/")
+            if (len(suffix) != 3 or not re.fullmatch(r"[a-f0-9]{64}", suffix[0])
+                    or not suffix[1].isdecimal() or not 1 <= int(suffix[1]) <= 5
+                    or suffix[2] != ("video.mp4" if name == "video" else name + ".jpg")):
+                raise RecordConflict()
+            if parent is not None and parent != suffix[:2]:
+                raise RecordConflict()
+            parent = suffix[:2]
+        signed = {name: {"url": assets.signed_read(asset), "sha256": asset.sha256,
+                         "byteSize": asset.byte_size, "contentType": asset.content_type} for name, asset in mapping.items()}
+        if records.get_project(user.uid, project_id) != project:
             raise RecordConflict()
         return {"expiresAt": utc_now() + timedelta(seconds=300), "assets": signed}
 

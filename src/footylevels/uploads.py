@@ -11,7 +11,7 @@ from google.api_core import exceptions
 from google.cloud import firestore
 
 from .assets import FILE_LIMIT, StorageUnavailable
-from .records import AssetRef, ProjectRecord, UploadRecord, utc_now
+from .records import AssetRef, JobRecord, ProjectRecord, UploadRecord, utc_now
 from .repositories import FirestoreRecords, RecordConflict, RecordNotFound
 
 
@@ -134,7 +134,15 @@ class FirestoreUploads(FirestoreRecords):
                 raise RecordConflict("Storage accounting requires reconciliation")
             project = ProjectRecord.model_validate({**project.document(), "video": record.asset.document(),
                 "inputRevision": project.input_revision + 1, "state": "preparing", "activeUploadId": None, "updatedAt": now})
-            # Valid bytes are not yet a playable video. FP-54 owns decoding/preparation.
+            # Source publication and durable CPU dispatch commit together. Never
+            # create a playable state from a checksum alone or use an in-memory queue.
+            job_id = hashlib.sha256(json.dumps([uid, project.id, project.input_revision,
+                record.asset.sha256, "media-720p30-v1"], separators=(",", ":")).encode()).hexdigest()
+            job = JobRecord(id=job_id, owner_id=uid, project_id=project.id, kind="prepareMedia",
+                input_revision=project.input_revision, input_hash=record.asset.sha256,
+                profile_version="media-720p30-v1", source_asset=record.asset)
+            project = project.model_copy(update={"active_job_id": job.id})
+            transaction.create(self._ref("jobs", job.id), job.document())
             transaction.set(project_ref, project.document())
             transaction.set(ref, record.model_copy(update={"status": "committed", "committed_revision": project.input_revision,
                 "reserved_bytes": record.asset.byte_size, "updated_at": now}).document())

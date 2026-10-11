@@ -197,7 +197,7 @@ class FirestoreRecords:
                 raise RecordConflict("Source asset does not belong to this project")
             record = ProjectRecord.model_validate({**existing.document(), "video": source.document(),
                 "inputRevision": existing.input_revision + 1, "state": "ready", "updatedAt": utc_now(),
-                "latestReconstructionId": None})
+                "latestReconstructionId": None, "preparedMedia": None, "mediaError": None})
             transaction.set(ref, record.document())
             return record
 

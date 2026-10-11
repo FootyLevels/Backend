@@ -39,12 +39,166 @@ def cloud():
     finally:
         # Only this invocation's random fixture owners and exact reference ID.
         for owner in [uid, other]:
-            for collection in ["comparisons", "reconstructions", "jobs", "projects"]:
+            for collection in ["comparisons", "reconstructions", "jobs", "projects", "uploads", "assetReservations"]:
                 for snapshot in client.collection(collection).where(filter=FieldFilter("ownerId", "==", owner)).stream():
                     snapshot.reference.delete()
             client.collection("users").document(owner).delete()
+            client.collection("storageUsage").document(owner).delete()
+            client.collection("storageUsage").document(owner + "-usage").delete()
         client.collection("references").document(uid).delete()
         client.close()
+
+
+def media_jobs_fixture(client, fixture_uid):
+    from footylevels.media_jobs import FirestoreMediaJobs
+    class ScopedMediaJobs(FirestoreMediaJobs):
+        def _ledgers(self, owner):
+            # Metadata-only integration tests never touch the actual global quota.
+            return self._ref("storageUsage", fixture_uid), self._ref("storageUsage", owner + "-usage")
+    return ScopedMediaJobs(client)
+
+
+def media_result(job):
+    from footylevels.records import MediaPreview, PreparedMedia
+    prefix = f"users/{job.owner_id}/projects/{job.project_id}/media/{job.id}/{job.attempt_count}/"
+    video = AssetRef(bucket="private-media", object_key=prefix + "video.mp4", sha256="a" * 64,
+                     byte_size=20, content_type="video/mp4")
+    jpeg = AssetRef(bucket="private-media", object_key=prefix + "preview-00.jpg", sha256="b" * 64,
+                    byte_size=10, content_type="image/jpeg")
+    return PreparedMedia(video=video, width=320, height=240, duration=2, frame_count=60,
+                         previews=(MediaPreview(asset=jpeg, timestamp=0.5, frame_index=15),))
+
+
+def preparing_project(repo, jobs, uid):
+    project = repo.create_project(uid, "Media fixture", "gallery")
+    upload = jobs.begin(uid, project.id, 1, 12, "a" * 64, "video/mp4", "media-fixture-key-1234")
+    return jobs.commit_upload(uid, upload.id), upload
+
+
+def test_media_dispatch_claim_restart_and_stale_publication(cloud):
+    from footylevels.repositories import RecordConflict
+    repo, client, uid, _ = cloud
+    jobs = media_jobs_fixture(client, uid)
+    project, upload = preparing_project(repo, jobs, uid)
+    assert project.state == "preparing" and project.active_job_id
+    assert jobs.commit_upload(uid, upload.id) == project
+    with ThreadPoolExecutor(max_workers=2) as pool:
+        claims = list(pool.map(lambda worker: jobs.claim(project.id, worker), ["worker-a", "worker-b"]))
+    claim = next(j for j in claims if j is not None)
+    assert sum(j is not None for j in claims) == 1 and claim.attempt_count == 1
+    jobs.checkpoint(claim, "decodingMedia")
+    assert repo.get_job(uid, claim.id).stage == "decodingMedia"
+    media = media_result(claim)
+    assets = [media.video, *[p.asset for p in media.previews]]
+    jobs.reserve_outputs(claim, assets)
+    jobs.reserve_outputs(claim, assets)
+    used = client.collection("storageUsage").document(uid).get().to_dict()["bytes"]
+    assert used == 12 + 30
+    client.collection("jobs").document(claim.id).update({"leaseExpiresAt": utc_now() - timedelta(seconds=1)})
+    restarted = media_jobs_fixture(client, uid)
+    replacement = restarted.claim(project.id, "worker-after-restart")
+    assert replacement.id == claim.id and replacement.attempt_count == 2
+    for action in [lambda: jobs.checkpoint(claim, "publishingMedia"),
+                   lambda: jobs.reserve_outputs(claim, assets), lambda: jobs.publish(claim, media)]:
+        with pytest.raises(RecordConflict):
+            action()
+    assert repo.get_project(uid, project.id).state == "preparing"
+    latest = media_result(replacement)
+    restarted.reserve_outputs(replacement, [latest.video, *[p.asset for p in latest.previews]])
+    published = restarted.publish(replacement, latest)
+    assert published.state == "ready" and published.prepared_media == latest
+    assert published.video == project.video and published.input_revision == project.input_revision
+    assert published.active_job_id is None
+    assert repo.get_job(uid, replacement.id).status == "succeeded"
+    assert restarted.claim(project.id, "late-worker") is None
+
+
+def test_media_rejection_retry_bound_and_tombstone_fence(cloud):
+    from footylevels.repositories import RecordNotFound
+    repo, client, uid, _ = cloud
+    jobs = media_jobs_fixture(client, uid)
+    project, _ = preparing_project(repo, jobs, uid)
+    claim = jobs.claim(project.id, "worker")
+    failed = jobs.fail(claim, "invalid_media")
+    assert failed.status == "failed" and failed.error_code == "invalid_media"
+    assert repo.get_project(uid, project.id).state == "rejected"
+    assert jobs.claim(project.id, "another") is None
+    retry_project, _ = preparing_project(repo, jobs, uid)
+    for attempt in range(1, 4):
+        retry = jobs.claim(retry_project.id, "worker")
+        assert retry.attempt_count == attempt
+        status = jobs.fail(retry, "preparation_unavailable", retry=True).status
+        assert status == ("retrying" if attempt < 3 else "failed")
+    assert jobs.claim(retry_project.id, "another") is None
+    deleted_project, _ = preparing_project(repo, jobs, uid)
+    late = jobs.claim(deleted_project.id, "worker")
+    repo.mark_deleting(uid, deleted_project.id)
+    assert client.collection("jobs").document(late.id).get().to_dict()["status"] == "cancelled"
+    with pytest.raises(RecordNotFound):
+        jobs.checkpoint(late, "publishingMedia")
+
+
+def test_media_orphan_cleanup_keeps_winners_and_releases_exact_quota(cloud):
+    import hashlib
+    from footylevels.repositories import RecordConflict
+    repo, client, uid, _ = cloud
+    jobs = media_jobs_fixture(client, uid)
+    project, _ = preparing_project(repo, jobs, uid)
+    first = jobs.claim(project.id, "worker")
+    old_media = media_result(first)
+    old_assets = [old_media.video, old_media.previews[0].asset]
+    jobs.reserve_outputs(first, old_assets)
+    jobs.fail(first, "preparation_unavailable", retry=True)
+    second = jobs.claim(project.id, "replacement")
+    latest = media_result(second)
+    jobs.reserve_outputs(second, [latest.video, latest.previews[0].asset])
+    jobs.publish(second, latest)
+    class Store:
+        deleted = []
+        absent = []
+        def delete_exact(self, asset): self.deleted.append(asset)
+        def verify_absent(self, asset): self.absent.append(asset)
+    store = Store()
+    for asset in old_assets:
+        identifier = hashlib.sha256(asset.object_key.encode()).hexdigest()
+        with pytest.raises(RecordConflict):
+            jobs.cleanup_orphan_output(identifier, store)
+        client.collection("assetReservations").document(identifier).update({"createdAt": utc_now() - timedelta(hours=25)})
+        jobs.cleanup_orphan_output(identifier, store)
+        with pytest.raises(RecordConflict):
+            jobs.cleanup_orphan_output(identifier, store)
+    assert store.deleted == store.absent == old_assets
+    assert client.collection("storageUsage").document(uid).get().to_dict()["bytes"] == 12 + 30
+    winning_id = hashlib.sha256(latest.video.object_key.encode()).hexdigest()
+    client.collection("assetReservations").document(winning_id).update({"createdAt": utc_now() - timedelta(hours=25)})
+    with pytest.raises(RecordConflict):
+        jobs.cleanup_orphan_output(winning_id, store)
+    assert store.deleted == old_assets
+
+
+def test_upload_maintenance_enforces_quarantine_and_releases_once(cloud):
+    from footylevels.repositories import RecordConflict
+    repo, client, uid, _ = cloud
+    jobs = media_jobs_fixture(client, uid)
+    project = repo.create_project(uid, "Expired upload fixture", "gallery")
+    upload = jobs.begin(uid, project.id, 1, 12, "a" * 64, "video/mp4", "maintenance-fixture-key")
+    class Store:
+        deleted = []
+        absent = []
+        def delete_exact(self, asset): self.deleted.append(asset)
+        def verify_absent(self, asset): self.absent.append(asset)
+    store = Store()
+    with pytest.raises(RecordConflict):
+        jobs.cleanup_expired(upload.id, store)
+    assert not store.deleted
+    client.collection("uploads").document(upload.id).update({"expiresAt": utc_now() - timedelta(hours=49),
+                                                            "cleanupAfter": utc_now() - timedelta(hours=1)})
+    cleaned = jobs.cleanup_expired(upload.id, store)
+    assert cleaned.status == "cancelled" and cleaned.reserved_bytes == 0
+    assert jobs.cleanup_expired(upload.id, store) == cleaned
+    assert store.deleted == store.absent == [upload.asset]
+    assert client.collection("storageUsage").document(uid).get().to_dict()["bytes"] == 0
+    assert repo.get_project(uid, project.id).active_upload_id is None
 
 
 def ready_project(repo, uid):

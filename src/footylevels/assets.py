@@ -93,6 +93,31 @@ class SupabaseAssets:
             if size != asset.byte_size or digest.hexdigest() != asset.sha256:
                 raise RecordConflict("Uploaded size/checksum does not match")
 
+    def download_file(self, asset: AssetRef, filename: Path):
+        """Trusted worker staging; stream with exact size/hash and no redirects."""
+        try:
+            with filename.open("xb") as target:
+                with self._request("GET", "/object/authenticated/" + self._path(asset), stream=True) as response:
+                    if response.status_code != 200:
+                        raise StorageUnavailable()
+                    digest, size = hashlib.sha256(), 0
+                    try:
+                        for chunk in response.iter_content(1024 * 1024):
+                            size += len(chunk)
+                            if size > asset.byte_size or size > FILE_LIMIT:
+                                raise RecordConflict("Source size changed")
+                            digest.update(chunk)
+                            target.write(chunk)
+                    except requests.RequestException:
+                        raise StorageUnavailable() from None
+                    if size != asset.byte_size or digest.hexdigest() != asset.sha256:
+                        raise RecordConflict("Source checksum changed")
+        except FileExistsError:
+            raise RecordConflict("Staging file already exists") from None
+        except BaseException:
+            filename.unlink(missing_ok=True)
+            raise
+
     def put_file(self, asset: AssetRef, filename: Path):
         # For FP-39's trusted runner, never exposed as a client-selected path.
         digest = hashlib.sha256()

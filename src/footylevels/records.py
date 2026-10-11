@@ -57,6 +57,37 @@ class UserRecord(Record):
     account_state: Literal["active", "restricted", "deleting", "deleted"] = "active"
 
 
+class MediaPreview(Metadata):
+    asset: AssetRef
+    timestamp: float = Field(ge=0, lt=61, allow_inf_nan=False)
+    frame_index: int = Field(ge=0, lt=1830)
+
+
+class PreparedMedia(Metadata):
+    profile_version: Literal["media-720p30-v1"] = "media-720p30-v1"
+    video: AssetRef
+    width: int = Field(gt=0, le=1280)
+    height: int = Field(gt=0, le=720)
+    fps: Literal[30] = 30
+    duration: float = Field(ge=1, le=60.05, allow_inf_nan=False)
+    frame_count: int = Field(ge=30, le=1802)
+    source_rotation: Literal[0, 90, 180, 270] = 0
+    previews: tuple[MediaPreview, ...] = Field(min_length=1, max_length=6)
+
+    @model_validator(mode="after")
+    def valid_previews(self):
+        if self.video.bucket != "private-media" or self.video.content_type != "video/mp4":
+            raise ValueError("Prepared playback must remain private MP4")
+        if len({p.frame_index for p in self.previews}) != len(self.previews):
+            raise ValueError("Previews must select distinct frames")
+        for preview in self.previews:
+            if (preview.asset.bucket != "private-media" or preview.asset.content_type != "image/jpeg"
+                    or preview.frame_index >= self.frame_count or preview.timestamp >= self.duration
+                    or abs(preview.timestamp - preview.frame_index / self.fps) > 0.000001):
+                raise ValueError("Preview timestamp must refer to prepared playback")
+        return self
+
+
 class ProjectRecord(Record):
     owner_id: Id
     title: str = Field(min_length=1, max_length=120)
@@ -68,6 +99,8 @@ class ProjectRecord(Record):
     skill_id: Id | None = None
     input_revision: int = Field(default=1, ge=1)
     video: AssetRef | None = None
+    prepared_media: PreparedMedia | None = None
+    media_error: Literal["invalid_media", "unsupported_media", "source_file_limit", "prepared_file_limit", "processing_limit", "preparation_unavailable"] | None = None
     active_job_id: Id | None = None
     active_upload_id: Id | None = None
     latest_reconstruction_id: Id | None = None
@@ -85,7 +118,7 @@ class ProjectRecord(Record):
 class JobRecord(Record):
     owner_id: Id
     project_id: Id
-    kind: Literal["reconstructKeyframes", "reconstructMotion"]
+    kind: Literal["reconstructKeyframes", "reconstructMotion", "prepareMedia"]
     input_revision: int = Field(ge=1)
     input_hash: Sha256
     profile_version: str = Field(min_length=1, max_length=80)
@@ -99,6 +132,7 @@ class JobRecord(Record):
     worker_id: Id | None = None
     reconstruction_id: Id | None = None
     finished_at: AwareDatetime | None = None
+    error_code: Literal["invalid_media", "unsupported_media", "source_file_limit", "prepared_file_limit", "processing_limit", "preparation_unavailable"] | None = None
 
 
 class Engine(Metadata):

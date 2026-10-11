@@ -216,3 +216,43 @@ def test_deletion_during_verification_cannot_publish(setup):
     assets.verify = lambda asset: records.mark_deleting('alice', pid)
     assert c.post(f'/api/uploads/{uid}/finalize', headers=headers('alice')).status_code == 404
     assert records.projects[pid].video is None
+
+
+def test_prepared_media_capabilities_are_owned_and_attempt_scoped(setup):
+    from footylevels.records import MediaPreview, PreparedMedia
+    c, records, uploads, assets, pid = setup
+    identifier = begin(c, pid).json()['id']
+    c.post(f'/api/uploads/{identifier}/finalize', headers=headers('alice'))
+    prefix = f'users/alice/projects/{pid}/media/' + 'a' * 64 + '/1/'
+    def file(name, mime):
+        return AssetRef(bucket='private-media', object_key=prefix + name, sha256='a'*64, byte_size=12, content_type=mime)
+    media = PreparedMedia(video=file('video.mp4', 'video/mp4'), width=320, height=240, duration=2, frame_count=60,
+        previews=(MediaPreview(asset=file('preview-00.jpg', 'image/jpeg'), timestamp=0.5, frame_index=15),))
+    records.projects[pid] = records.projects[pid].model_copy(update={'state': 'ready', 'prepared_media': media})
+    assert c.post(f'/api/projects/{pid}/media-assets', headers=headers('bob')).status_code == 404
+    assert not assets.reads
+    response = c.post(f'/api/projects/{pid}/media-assets', headers=headers('alice'))
+    assert response.status_code == 200 and set(response.json()['assets']) == {'video', 'preview-00'}
+    assets.reads.clear()
+    foreign = media.video.model_copy(update={'object_key': prefix.replace('/1/', '/2/') + 'video.mp4'})
+    records.projects[pid] = records.projects[pid].model_copy(update={'prepared_media': media.model_copy(update={'video': foreign})})
+    assert c.post(f'/api/projects/{pid}/media-assets', headers=headers('alice')).status_code == 409
+    assert not assets.reads
+
+
+def test_worker_download_checks_bytes_and_removes_only_its_partial_file(tmp_path):
+    store = SupabaseAssets('https://' + 'a'*20 + '.supabase.co', 'sb_secret_test')
+    asset = AssetRef(bucket='private-media', object_key='users/a/projects/p/source/a.mp4', byte_size=3,
+                     sha256=hashlib.sha256(b'abc').hexdigest(), content_type='video/mp4')
+    output = tmp_path / 'source.mp4'
+    store._request = lambda *a, **k: Response(chunks=[b'a', b'bc'])
+    store.download_file(asset, output)
+    assert output.read_bytes() == b'abc'
+    with pytest.raises(RecordConflict):
+        store.download_file(asset, output)
+    assert output.read_bytes() == b'abc'
+    output.unlink()
+    store._request = lambda *a, **k: Response(chunks=[b'xyz'])
+    with pytest.raises(RecordConflict):
+        store.download_file(asset, output)
+    assert not output.exists()
