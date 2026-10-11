@@ -139,6 +139,14 @@ class JobRecord(Record):
     next_attempt_at: AwareDatetime | None = None
     error_code: Literal["invalid_media", "unsupported_media", "source_file_limit", "prepared_file_limit", "processing_limit", "preparation_unavailable", "model_unavailable", "reconstruction_failed", "job_deadline", "input_changed"] | None = None
 
+    def document(self):
+        payload = super().document()
+        # During a rolling upgrade, old strict readers must still understand
+        # prepareMedia/legacy jobs. Only the new body profile needs this field.
+        if self.keyframes is None:
+            payload.pop("keyframes", None)
+        return payload
+
 
 class KeyframeInput(Metadata):
     frame_index: int = Field(ge=0, lt=1802)
