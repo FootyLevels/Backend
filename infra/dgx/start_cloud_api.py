@@ -38,7 +38,9 @@ if __name__ == "__main__":
     commands = [[sys.executable, str(Path(__file__).with_name("run_media_worker.py")), args.environment]]
     if args.reconstruction_adapter:
         commands.append([sys.executable, str(Path(__file__).with_name("run_reconstruction_worker.py")),
-            args.environment, "--adapter", str(args.reconstruction_adapter)])
+            args.environment, "--adapter", str(args.reconstruction_adapter),
+            "--adapter-arg=--socket=" + str(Path.home()/".local/share/footylevels/model-bridge/inference.sock"),
+            "--adapter-arg=--ffmpeg=" + str(Path.home()/"skill-lab/.media/bin/ffmpeg")])
     workers = []
     stopped = threading.Event()
     def supervise():

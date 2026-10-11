@@ -21,6 +21,7 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("environment", choices=["dev", "demo"])
     parser.add_argument("--adapter", type=Path, required=True)
+    parser.add_argument("--adapter-arg", action="append", default=[])
     parser.add_argument("--once", action="store_true")
     args = parser.parse_args()
     adapter = args.adapter.resolve(strict=True)
@@ -72,7 +73,7 @@ def main():
                             watchdog.daemon = True
                             watchdog.start()
                             try:
-                                outcome = run_job(jobs, storage, claim, [sys.executable, str(adapter)], root, stop=stop)
+                                outcome = run_job(jobs, storage, claim, [sys.executable, str(adapter), *args.adapter_arg], root, stop=stop)
                             finally:
                                 watchdog.cancel()
                             print(json.dumps({"service": "reconstruction-worker", "outcome": outcome}), flush=True)

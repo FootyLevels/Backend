@@ -28,7 +28,10 @@ def test_api_shutdown_releases_owned_worker(tmp_path, shutdown, gpu_enabled):
         f'import os, pathlib, time\npathlib.Path({str(pid_file)!r}).write_text(str(os.getpid()))\ntime.sleep(60)\n')
     gpu_pid_file = tmp_path / 'gpu-worker.pid'
     (scripts / 'run_reconstruction_worker.py').write_text(
-        f'import os, pathlib, time\npathlib.Path({str(gpu_pid_file)!r}).write_text(str(os.getpid()))\ntime.sleep(60)\n')
+        'import os, pathlib, sys, time\n'
+        'assert any(arg.startswith("--adapter-arg=--socket=") for arg in sys.argv)\n'
+        'assert any(arg.startswith("--adapter-arg=--ffmpeg=") for arg in sys.argv)\n'
+        f'pathlib.Path({str(gpu_pid_file)!r}).write_text(str(os.getpid()))\ntime.sleep(60)\n')
     adapter = scripts / 'fixture_adapter.py'
     adapter.write_text('')
     (tmp_path / 'api').mkdir()

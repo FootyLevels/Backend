@@ -42,6 +42,8 @@ def main():
     from verify_media_worker_dgx import cleanup
     ffmpeg = Path.home()/'skill-lab/.media/bin/ffmpeg'
     bridge_root = Path.home()/'.local/share/footylevels/model-bridge'
+    adapter_command=[sys.executable,str(ROOT/'infra/dgx/body_keyframes_adapter.py'),
+        '--socket',str(bridge_root/'inference.sock'),'--ffmpeg',str(ffmpeg)]
     def health():
         with socket.socket(socket.AF_UNIX) as stream:
             stream.settimeout(10)
@@ -119,7 +121,7 @@ def main():
             storage.download_file(result.source_asset,replay/'input.mp4')
             (replay/'job.json').write_text(persisted.model_dump_json(by_alias=True,
                 exclude={'lease_token','worker_id','lease_expires_at'}))
-            subprocess.run([sys.executable,str(ROOT/'infra/dgx/body_keyframes_adapter.py'),str(replay)],
+            subprocess.run([*adapter_command,str(replay)],
                 env={'PATH':os.defpath,'HOME':str(replay),'TMPDIR':str(replay)},check=True,timeout=60,
                 stdout=subprocess.DEVNULL,stderr=subprocess.DEVNULL)
             repeated=ReconstructionRecord.model_validate_json((replay/'result.json').read_text())
@@ -152,7 +154,7 @@ def main():
             staging.mkdir()
             with ThreadPoolExecutor(max_workers=1) as executor:
                 attempt=executor.submit(run_job,jobs,storage,cancel_claim,
-                    [sys.executable,str(ROOT/'infra/dgx/body_keyframes_adapter.py')],staging,
+                    adapter_command,staging,
                     heartbeat_seconds=.1,command_timeout=30)
                 deadline=time.monotonic()+15
                 observed=False

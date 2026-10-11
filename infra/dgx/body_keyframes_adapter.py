@@ -6,7 +6,6 @@ import hashlib
 import json
 import os
 from pathlib import Path
-import pwd
 import socket
 import struct
 import subprocess
@@ -112,10 +111,11 @@ def reconstruct(directory, socket_path, ffmpeg):
 
 
 if __name__ == "__main__":
-    home = Path(pwd.getpwuid(os.getuid()).pw_dir)  # the parent deliberately scrubs HOME
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--socket", type=Path, default=home / ".local/share/footylevels/model-bridge/inference.sock")
-    parser.add_argument("--ffmpeg", type=Path, default=home / "skill-lab/.media/bin/ffmpeg")
+    # User namespaces map the DGX account to uid 0; passwd would return /root,
+    # while HOME is deliberately temporary. The trusted parent pins both paths.
+    parser.add_argument("--socket", type=Path, required=True)
+    parser.add_argument("--ffmpeg", type=Path, required=True)
     parser.add_argument("directory", type=Path)
     args = parser.parse_args()
     reconstruct(args.directory, args.socket, args.ffmpeg)
