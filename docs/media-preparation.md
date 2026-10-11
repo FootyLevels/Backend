@@ -30,6 +30,8 @@ space, 150 CPU seconds, 50 MiB output-file, 64-descriptor and zero-core limits.
 Timeout/cancellation kills and reaps the group. Parent-death signaling prevents
 an orphan decoder after a killed supervisor. Staging is private and removed on
 success/failure; startup removes abandoned staging older than 24 hours.
+The worker also has a hard ten-minute per-job watchdog, including cloud calls;
+its 15-minute durable lease allows a safe reclaim after deployment restart.
 
 ## Durable records and publication
 

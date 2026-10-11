@@ -8,6 +8,7 @@ import re
 import shutil
 from pathlib import Path
 import sys
+import threading
 import time
 import uuid
 from datetime import timedelta
@@ -86,7 +87,19 @@ def main():
                         try:
                             job = jobs.claim(project, worker)
                             if job:
-                                result = process_job(jobs, storage, job, root)
+                                # A hard supervisor deadline also bounds stalled
+                                # cloud calls. The durable lease outlives this
+                                # process, so restart can safely reclaim it.
+                                def deadline():
+                                    print(json.dumps({"service": "media-worker", "outcome": "worker-deadline"}), flush=True)
+                                    os._exit(1)
+                                watchdog = threading.Timer(600, deadline)
+                                watchdog.daemon = True
+                                watchdog.start()
+                                try:
+                                    result = process_job(jobs, storage, job, root)
+                                finally:
+                                    watchdog.cancel()
                                 print(json.dumps({"service": "media-worker", "outcome": result}), flush=True)
                         except (RecordConflict, RecordNotFound):
                             continue
