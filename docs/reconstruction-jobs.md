@@ -103,3 +103,25 @@ DGX. FP-39 supplies the selected-frame/motion adapter and verified private artif
 publication; it must reuse the single warm runtime rather than load another model.
 The public compatibility model API and authenticated local API remain separate.
 This checkpoint is not an end-to-end iOS-to-3D verification.
+
+The deployment check exposed an existing shutdown defect: Uvicorn re-raised
+SIGTERM before the launcher could reap its media child, leaving the old worker's
+lock held during an upgrade. `78a3b37` installs a graceful stop handler and binds
+the cloud worker's lifetime to its supervisor on Linux. Regression tests cover
+graceful shutdown and a forced parent crash. A live Development restart confirmed
+the API and worker both stopped and restarted with one worker and no orphan.
+
+Verified checkpoint: 200 local backend tests passed (16 explicitly skipped),
+15 real Firestore tests passed, and 66 candidate tests passed on the DGX, including
+both shutdown scenarios and actual FFmpeg decoding. Development runs `78a3b37`;
+GPU dispatch is disabled pending the adapter integration. The warm compatibility
+model runtime remains `c865730`.
+
+After the shutdown fix, the running deployment automatically prepared a real
+private synthetic clip through Firestore/Supabase: six previews and all seven
+output hashes passed, source revision stayed unchanged, and exact cleanup verified
+the absence of the source and seven prepared objects. The first probe during the
+failed upgrade was also cleaned up. No fixture recovery file remained.
+The API stayed healthy with one media worker and zero staging directories at
+0, 60 and 130 seconds after cleanup, including the subsequent polling cycle.
+Machine-readable evidence is in `infra/dgx/reconstruction-evidence.json`.

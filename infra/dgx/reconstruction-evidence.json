@@ -1,0 +1,45 @@
+{
+  "ticket": "FP-53",
+  "status": "inProgress",
+  "verifiedDate": "2026-10-11",
+  "environment": "dev",
+  "branch": "codex/fp-53-reconstruction-jobs",
+  "lifecycleRevision": "cd8c43e",
+  "runnerRevision": "83f326a",
+  "activeApplicationRevision": "78a3b37",
+  "activeReleaseArchiveSha256": "62612aff03fc76caee468010bfc0b1262e2efd6e86691a94e363c8cbb96b790f",
+  "verification": {
+    "localBackendTestsPassed": 200,
+    "localBackendTestsExplicitlySkipped": 16,
+    "realDevelopmentFirestoreTestsPassed": 15,
+    "dgxCandidateTestsPassed": 66,
+    "gracefulAndForcedSupervisorShutdownTestsPassedOnLinux": true,
+    "liveGracefulRestartVerified": true,
+    "oldWorkerReaped": true,
+    "anonymousCancellationStatus": 401,
+    "automaticPrivateClipPreparation": {
+      "passed": true,
+      "sourceRevisionPreserved": true,
+      "previews": 6,
+      "outputChecksumsVerified": 7,
+      "sourceObjectsRemoved": 1,
+      "preparedObjectsRemoved": 7,
+      "fixtureRecordAndObjectAbsenceVerified": true,
+      "failedUpgradeProbeAlsoCleaned": true
+    },
+    "healthChecksAfterFixtureCleanupSeconds": [0, 60, 130],
+    "mediaWorkerCountAtEachHealthCheck": 1,
+    "stagingDirectoriesAtEachHealthCheck": 0,
+    "existingPublicModelRuntimeHealthy": true,
+    "existingPublicModelRuntimeRevision": "c865730",
+    "bodyModelRemainedLoaded": true
+  },
+  "limitations": {
+    "gpuDispatcherEnabled": false,
+    "realGpuReconstructionGeneratedByDurableRunner": false,
+    "fullIosToNew3dFlowVerified": false,
+    "authenticatedApiHasPublicOrigin": false,
+    "demoDeploymentChanged": false
+  },
+  "next": "Connect the serial durable runner to the existing warm model with attempt-aware dispatch, cancellation and recovery; verify a real private reconstruction before closing FP-53. FP-39 provides the authenticated selected-frame/motion contract and FP-19/40 the iOS playback integration."
+}
