@@ -511,6 +511,33 @@ def test_reconstruction_pins_canonical_media_and_operator_pause(cloud):
     assert enqueue(records, uid, another).status == 'queued'
 
 
+def test_body_selection_is_persisted_and_pinned_to_canonical_input(cloud):
+    from footylevels.records import KeyframeInput
+    from footylevels.model_requests import BODY_PROFILE, body_input_hash
+    from footylevels.repositories import RecordConflict
+    repo, client, uid, _ = cloud
+    jobs = media_jobs_fixture(client, uid)
+    project, _ = preparing_project(repo, jobs, uid)
+    claim = jobs.claim(project.id, 'media-worker')
+    media = media_result(claim)
+    jobs.reserve_outputs(claim, [media.video, media.previews[0].asset])
+    project = jobs.publish(claim, media)
+    selections = [KeyframeInput(frame_index=15, bbox=(.1, .1, .9, .9))]
+    digest = body_input_hash(media.video, selections)
+    for frames, input_hash in [(None, digest), (selections, 'f'*64),
+            ([*selections, *selections], digest), ([KeyframeInput(frame_index=60, bbox=(0,0,1,1))], digest)]:
+        with pytest.raises(RecordConflict):
+            repo.enqueue_reconstruction(uid, project.id, project.input_revision, 'reconstructKeyframes',
+                input_hash, BODY_PROFILE, keyframes=frames)
+    record = repo.enqueue_reconstruction(uid, project.id, project.input_revision, 'reconstructKeyframes',
+        digest, BODY_PROFILE, keyframes=selections)
+    assert record.keyframes == tuple(selections)
+    assert repo.get_job(uid, record.id).keyframes == tuple(selections)
+    assert repo.enqueue_reconstruction(uid, project.id, project.input_revision, 'reconstructKeyframes',
+        digest, BODY_PROFILE, keyframes=selections).id == record.id
+    assert record.source_asset == media.video
+
+
 def test_reconstruction_serial_runner_with_real_firestore_and_isolated_quota(cloud, tmp_path):
     from footylevels.reconstruction_jobs import FirestoreReconstructionJobs
     from footylevels.reconstruction_worker import run_job

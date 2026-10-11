@@ -22,7 +22,15 @@ async def lifespan(app):
     if os.getenv("FOOTYLEVELS_PRELOAD_BODY") == "1":
         from .providers.local import LocalProvider
         LocalProvider().load()
-    yield
+    bridge = None
+    if os.getenv("FOOTYLEVELS_MODEL_BRIDGE") == "1":
+        from .model_bridge import start_owned_bridge
+        bridge = start_owned_bridge()
+    try:
+        yield
+    finally:
+        if bridge:
+            bridge.close()
 
 
 app = FastAPI(title="Skill Lab", lifespan=lifespan)

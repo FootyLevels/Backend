@@ -12,7 +12,9 @@ job kind and profile version. Repeating a request returns its durable job.
 
 The job pins the canonical prepared video when present; the original recording
 remains separately retained. Trusted legacy ready projects can use their source.
-Selected frame/bounding-box request data and the model adapter belong to FP-39.
+The `body-keyframes-v1` profile persists up to 24 distinct canonical frame indices
+and normalized subject boxes. Enqueue verifies bounds and the source/request hash.
+The private adapter can repeat this immutable selection after a process restart.
 
 Each claim transaction checks project ownership, revision, active job and source.
 It creates a new random lease token and attempt number. A lease lasts five minutes;
@@ -79,10 +81,39 @@ leases. Old staging directories are removed only after 24 hours under the privat
 worker root. Unpublished reservations are reconciled after the same writer grace;
 immutable winning artifacts stay reserved, including older retained results.
 
-Remote model execution needs attempt-aware cancellation/deduplication in the
-FP-39 adapter as well: stopping the CPU client alone cannot cancel work already
-submitted to the warm model service. Therefore this runner is not enabled against
-the compatibility public API yet.
+### Owned model bridge
+
+`body_keyframes_adapter.py` is a credential-free CPU client of the already loaded
+SAM 3D Body estimator. It decodes exact frames from canonical playback, sends JPEGs
+and subject boxes over `~/.local/share/footylevels/model-bridge/inference.sock`, and
+writes one GLB per successful frame plus `keyframes.json`. The manifest pins source,
+selection, attempt, engine hashes, topology, timestamps, boxes and camera metadata.
+Missing frames produce an explicit partial outcome; zero bodies fail the attempt.
+No scoring or correctness classification is produced.
+
+The private bridge uses the existing single-thread executor, also shared with
+compatibility body/motion work. It loads no second estimator. Its directory is
+0700, socket 0600, and a file lock excludes competing owned bridges. Request identity
+includes job, attempt, frame, selection/input/image hashes and engine provenance.
+Completed responses replay from immutable disk cache after a lost acknowledgement
+or runtime restart. Configuration/attempt changes cannot reuse a stale identity.
+The cache retains at most 100 entries and removes expired entries on new work after
+24 hours; cached outputs have no publication rights and remain separate from user
+cloud assets. Connections, JPEG dimensions/size and response packets are bounded.
+
+Disconnect cancels queued inference. In-flight inference finishes only into private
+cache, while the cloud parent fences publication. It cannot overlap new work because
+the same serial executor owns both. An inference watchdog exits our owned model
+process after 180 seconds of hung execution; restart the owned runtime using
+`infra/dgx/runtime.md`. Recovery needs that restart; no uptime guarantee is implied.
+Cloud attempt/retry deadlines still provide a durable failure when the model stays
+unavailable. Unsupported profiles fail within the bounded retry policy.
+
+The cloud launcher enables the serial dispatcher only when explicitly given
+`--reconstruction-adapter /absolute/release/infra/dgx/body_keyframes_adapter.py`.
+It supervises both workers and reaps them on shutdown. This adds no public model
+route or ngrok traffic policy. Whole-motion adapters and authenticated request/UI
+integration remain FP-39/FP-19/FP-40 work.
 
 ## Verification and remaining integration
 

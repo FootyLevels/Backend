@@ -17,6 +17,7 @@ export SAM3_CHECKPOINT="$MODEL_ROOT/checkpoints/sam3/sam3.pt"
 export SAM3D_OBJECTS_CONFIG="$MODEL_ROOT/checkpoints/sam-3d-objects/checkpoints/pipeline.yaml"
 export SKILL_LAB_DATA="${FOOTYLEVELS_DATA_DIR:-$HOME/.local/share/footylevels/runtime/data}"
 export FOOTYLEVELS_PRELOAD_BODY=1
+export FOOTYLEVELS_MODEL_BRIDGE=1
 export PATH="$MODEL_ROOT/.media/bin:$PATH"
 unset FAL_KEY GOOGLE_APPLICATION_CREDENTIALS SUPABASE_SECRET_KEY
 mkdir -p "$SKILL_LAB_DATA"

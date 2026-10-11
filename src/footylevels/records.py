@@ -123,6 +123,7 @@ class JobRecord(Record):
     input_hash: Sha256
     profile_version: str = Field(min_length=1, max_length=80)
     source_asset: AssetRef
+    keyframes: tuple["KeyframeInput", ...] | None = Field(default=None, min_length=1, max_length=24)
     status: Literal["queued", "running", "retrying", "succeeded", "partial", "failed", "cancelled"] = "queued"
     stage: str = Field(default="queued", min_length=1, max_length=80)
     attempt_count: int = Field(default=0, ge=0)
@@ -137,6 +138,22 @@ class JobRecord(Record):
     deadline_at: AwareDatetime | None = None
     next_attempt_at: AwareDatetime | None = None
     error_code: Literal["invalid_media", "unsupported_media", "source_file_limit", "prepared_file_limit", "processing_limit", "preparation_unavailable", "model_unavailable", "reconstruction_failed", "job_deadline", "input_changed"] | None = None
+
+
+class KeyframeInput(Metadata):
+    frame_index: int = Field(ge=0, lt=1802)
+    bbox: tuple[float, float, float, float]
+
+    @model_validator(mode="after")
+    def normalized_box(self):
+        import math
+        left, top, right, bottom = self.bbox
+        if not all(math.isfinite(n) and 0 <= n <= 1 for n in self.bbox) or right-left < .03 or bottom-top < .03:
+            raise ValueError("Use normalized left/top/right/bottom with positive area")
+        return self
+
+
+JobRecord.model_rebuild()
 
 
 class Engine(Metadata):

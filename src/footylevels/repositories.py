@@ -45,7 +45,7 @@ class RecordsRepository(Protocol):
     def get_project(self, uid: str, project_id: str) -> ProjectRecord: ...
     def list_projects(self, uid: str, limit: int = 20, cursor: str | None = None) -> tuple[list[ProjectRecord], str | None]: ...
     def enqueue_reconstruction(self, uid: str, project_id: str, input_revision: int,
-                               kind: str, input_hash: str, profile_version: str) -> JobRecord: ...
+                               kind: str, input_hash: str, profile_version: str, *, keyframes=None) -> JobRecord: ...
     def publish_reconstruction(self, result: ReconstructionRecord, lease_token: str) -> ReconstructionRecord: ...
     def rename_project(self, uid: str, project_id: str, title: str) -> ProjectRecord: ...
     def set_source(self, uid: str, project_id: str, source: AssetRef, expected_revision: int) -> ProjectRecord: ...
@@ -235,7 +235,7 @@ class FirestoreRecords:
         return delete(self.client.transaction())
 
     def enqueue_reconstruction(self, uid: str, project_id: str, input_revision: int,
-                               kind: str, input_hash: str, profile_version: str) -> JobRecord:
+                               kind: str, input_hash: str, profile_version: str, *, keyframes=None) -> JobRecord:
         if kind not in {"reconstructKeyframes", "reconstructMotion"}:
             raise ValueError("Expected a reconstruction job")
         # Semantic deduplication survives a restart and concurrent duplicate requests.
@@ -250,6 +250,17 @@ class FirestoreRecords:
             control = self._reconstruction_control().get(transaction=transaction)
             if project.input_revision != input_revision or project.state != "ready" or project.video is None:
                 raise RecordConflict("Reconstruction input is stale or unavailable")
+            from .model_requests import BODY_PROFILE, body_input_hash
+            from .records import KeyframeInput
+            selected = tuple(KeyframeInput.model_validate(frame) for frame in keyframes) if keyframes is not None else None
+            if profile_version == BODY_PROFILE:
+                if (kind != "reconstructKeyframes" or not selected or not project.prepared_media
+                        or len({frame.frame_index for frame in selected}) != len(selected)
+                        or any(frame.frame_index >= project.prepared_media.frame_count for frame in selected)
+                        or input_hash != body_input_hash(reconstruction_source(project), selected)):
+                    raise RecordConflict("Keyframe input is missing or inconsistent")
+            elif selected is not None:
+                raise ValueError("Keyframes require the verified body profile")
             if snapshot.exists:
                 return self._owned(self._record(snapshot, JobRecord), uid)
             if control.exists and control.to_dict().get("acceptingRequests") is False:
@@ -258,7 +269,8 @@ class FirestoreRecords:
                 raise RecordConflict("Another reconstruction is active")
             record = JobRecord(id=job_id, owner_id=uid, project_id=project_id, input_revision=input_revision,
                                input_hash=input_hash, kind=kind, profile_version=profile_version,
-                               source_asset=reconstruction_source(project), deadline_at=utc_now() + timedelta(hours=24))
+                               source_asset=reconstruction_source(project), keyframes=selected,
+                               deadline_at=utc_now() + timedelta(hours=24))
             transaction.create(job_ref, record.document())
             transaction.update(project_ref, {"activeJobId": job_id, "updatedAt": record.created_at})
             return record
