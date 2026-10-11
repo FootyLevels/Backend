@@ -1,0 +1,72 @@
+{
+  "runtime": {
+    "owner": "FootyLevels",
+    "bodyModelLoaded": true,
+    "revision": "c865730"
+  },
+  "projectId": "80e511db2c0e4a61",
+  "mesh": {
+    "bytes": 960048,
+    "vertices": 18439,
+    "faces": 36874,
+    "keypoints": 70
+  },
+  "keyframeWallSeconds": [
+    4.25,
+    2.17
+  ],
+  "motion": {
+    "frames": 3,
+    "validBodyFrames": 3,
+    "vertices": 18439,
+    "faces": 36874,
+    "chunks": 1,
+    "status": "partial",
+    "reason": "Optional football/ground processing skipped: insufficient free GPU memory. Body playback is available.",
+    "ballReady": false,
+    "groundAligned": false,
+    "wallSeconds": 40.49
+  },
+  "bodyRewarmedAfterMotion": true,
+  "cleanup": "deleted-and-404-verified",
+  "verifiedAt": "2026-10-11T02:54:58.958272+00:00",
+  "ticket": "FP-52",
+  "sourceCommit": "c86573023f07d565617b8b9315c2a76c093b7370",
+  "modelServiceSource": "01cff082cfff00ac323511cb81024f33717095b9",
+  "gpu": {
+    "uuid": "GPU-bf91a965-c736-7317-95ff-469e3d182eeb",
+    "physicalIndex": 0,
+    "idleProcessMemoryMiB": 4076,
+    "measurement": "Post-motion resident allocation, not a peak measurement"
+  },
+  "packages": {
+    "python": "3.12.13",
+    "torch": "2.10.0+cu128",
+    "torchvision": "0.25.0+cu128",
+    "numpy": "2.5.3",
+    "opencv-python-headless": "4.14.0.94",
+    "fastapi": "0.141.1",
+    "uvicorn": "0.53.0",
+    "trimesh": "4.12.2",
+    "scipy": "1.18.1",
+    "omegaconf": "2.3.1"
+  },
+  "tests": {
+    "passed": 19,
+    "environment": "existing DGX GPU interpreter; isolated pytest target"
+  },
+  "limitations": [
+    "Compatibility runtime has not yet integrated Firebase ownership, private Supabase storage or durable Firestore jobs",
+    "Football/ground stages skipped below configured 32 GiB free memory threshold",
+    "Other users GPU workloads remain unchanged; capacity is not reserved",
+    "Segmentation and whole-motion models load per stage; only the body keyframe estimator stays resident",
+    "Existing semester fixture is internal test material; redistribution audit remains FP-21"
+  ],
+  "artifactSha256": {
+    "body.json": "dfd043f2cf9552a5e84400612995e35021e620a2d6483dbbc22e441f5088d76e",
+    "body.glb": "5c56ff109cd2bdf9cb5994e60bcb57b388e247204673879e6066e88632605df3",
+    "motion/body-000000.bin.gz": "9c61bcadb15decff69bc9d671d3a82e6ef64aa2500ac0958c1dcd65cf7983a96",
+    "motion/faces.bin": "f6748e290ef37fbb6877c4cc5bd7287105db9e98252b0ba170ae9ac3c45eacd6",
+    "motion/sequence.json": "7af0178c4b5fca707ce95a864de62cbdc025b4f1193ebf246961fedab2f28564"
+  }
+}

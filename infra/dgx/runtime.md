@@ -1,4 +1,80 @@
-# Shared reconstruction runtime — FP-52
+# Reconstruction runtime — FP-52
+
+## Owned runtime takeover — 10 October 2026
+
+Kunal authorized replacement after Digaant removed his listener. The replacement
+runs under `bajajkun`, on loopback 8010, through the same approved ngrok endpoint.
+The model files and environments were already under Kunal's `~/skill-lab`; the
+former teammate checkout used symlinks to them. No reinstall/download, sudo or
+other users' process eviction was needed.
+
+Verified source checkpoint: Backend `c865730`, copied from model service commit
+`01cff082cfff00ac323511cb81024f33717095b9`. Runtime code is now tracked in
+`runtime/skill_lab` in Backend. The cloud API remains a separate integration
+boundary; this restored compatibility service has no cloud credentials attached.
+
+The deployed immutable source directory is
+`~/.local/share/footylevels/runtime/releases/c865730`; `runtime/current` points to
+it. Persistent runtime data lives separately in `runtime/data`, private logs in
+`runtime/logs`, and `runtime/api.pid` records the owned launcher. The observed
+server process is 3847072 (historical, always recheck before using it).
+
+### Launch and recovery
+
+Select the single assigned/authorized A100 UUID. The verified deployment uses
+`GPU-bf91a965-c736-7317-95ff-469e3d182eeb`, the A100 at physical index 0. Other users'
+vLLM jobs remain running; about 20.57 GiB CUDA headroom was available at preflight.
+Startup requires at least 12 GiB, checks body/MHR checkpoint hashes and pinned body
+source, verifies media tools and port availability, and preloads the body model
+before reporting startup complete. GPU availability is transient; a UUID pin does
+not reserve capacity or evict anyone else.
+
+```sh
+export FOOTYLEVELS_GPU_UUID=GPU-bf91a965-c736-7317-95ff-469e3d182eeb
+export FOOTYLEVELS_RUNTIME_REVISION=c865730
+release="$HOME/.local/share/footylevels/runtime/current"
+bash "$release/infra/dgx/with_network_dns.sh"   bash "$release/infra/dgx/start_runtime.sh"
+```
+
+For a detached session redirect output into an owner-only runtime log and save
+its specific launcher PID. Stop only a verified owned process/launch group whose
+working directory matches this release, after draining active jobs. Do not kill
+all Python/ngrok processes. The existing ngrok agent is independent and need not
+restart when this API restarts. A reconnecting API reports interrupted in-memory
+jobs for explicit retry; durable Firestore leases remain FP-53.
+
+The launcher uses existing GPU/segmentation/object interpreters and media tools
+without modifying their environments. Pytest 8.4.2 plus its dependencies were
+installed into a separate `runtime/test-dependencies` directory only for the 19
+passing tests. No server credentials or old `.env` were copied/loaded; the launcher
+unsets the paid provider key and cloud secret environment variables.
+
+Body weights stay loaded for keyframes. The serial motion runner releases the
+parent's warm body model before segmentation/body subprocesses, then rewarms it.
+Optional object/ground stages need 32 GiB free on that same selected GPU. With
+less memory, body output survives and the project explicitly reports partial
+completion. Segmentation and motion inference currently load once per job stage;
+this is not a claim that all models stay permanently resident. The threshold is
+a conservative admission check, not a guarantee that every larger request fits.
+
+### Verification
+
+The reused compatibility suite and two added low/high-memory runner cases passed
+19 tests in the DGX GPU environment. Public health reports `owner=FootyLevels`,
+`revision=c865730` and `bodyModelLoaded=true`. Final public smoke produced two valid 18,439-vertex / 36,874-face GLBs with 70
+finite keypoints, with observed wall times 4.25 s and 2.17 s (including polling).
+All 3 motion frames decoded; motion finished partial in 40.49 s with explicit
+optional football/ground omission, ballReady=false and groundAligned=false. Body
+weights rewarmed after motion. Idle GPU process allocation was 4,076 MiB, not a
+peak measurement. The exact final test project was deleted (204/read 404), and
+the original smoke fixture was likewise removed after the cleanup route was restored.
+Fresh artifact evidence is in `owned-runtime-evidence.json`; test media/results remain outside Git. Use
+`scripts/verify_owned_runtime.py` with a permitted bounded fixture to reproduce
+public upload/keyframe/motion downloads, independent decoding, warmup recovery
+and exact test-project deletion. The bundled semester example is used only as
+an existing internal fixture; redistribution remains FP-21.
+
+## Historical shared runtime validation
 
 Validated 10 October 2026. Kunal authorized reuse of the team's existing Skill Lab
 service on loopback port **8010**. It runs under Digaant's account. No additional

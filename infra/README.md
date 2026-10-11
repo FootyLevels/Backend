@@ -6,9 +6,9 @@ Current requirement: **free services only, no budget, no billing linkage or Blaz
 | --- | --- | --- |
 | Firebase social login | Spark projects | Google/email enabled in both; real iOS email/ownership checks pass; Google device check pending |
 | Firestore application records | Spark, Montreal | One protected default database per environment |
-| API | Existing DGX service through ngrok; modular DGX monolith selected | Public health/project reads verified; cloud adapters pending |
+| API | Owned DGX compatibility service through ngrok; modular cloud integration selected | Public health/project reads verified; cloud adapters pending |
 | Media preparation | Background work in the DGX deployment | Packaging/integration pending |
-| 3D generation | On-premises DGX | Shared team body runtime verified (FP-52); optional ball stage reported GPU OOM |
+| 3D generation | On-premises DGX | Owned warm body runtime verified (FP-52); optional object stages gated by available memory |
 | Private videos and generated assets | Supabase Free, Canada Central | Both environments' buckets created and verified. See [storage guide](supabase/README.md) |
 | Durable job dispatch | Firestore job records claimed by DGX background runner | Implementation pending; Pub/Sub/Tasks deferred |
 
@@ -144,9 +144,12 @@ and verified on FootyLevels. Normal Google/Supabase HTTPS requests now work when
 launched through [the isolated DNS wrapper](dgx/README.md), with certificate validation
 and unchanged shared network settings. Separate scoped runtime credentials subsequently passed authenticated Firestore and
 Supabase round trips in both environments; see [runtime access](dgx/runtime-access.md).
-FP-52 verified the authorized shared team service, model provenance and fresh body
-outputs without replacing its processes. Optional football reconstruction reported
-GPU OOM; durable job integration and coordinated runtime ownership remain pending.
+FP-52 first verified the shared service, then replaced it with an owned runtime
+after Kunal authorized takeover following Digaant removing his listener. Body weights
+stay warm on the selected A100; fresh keyframes and all short-clip body motion frames
+passed independent decoding. Optional football/ground stages are skipped below the
+configured free-memory threshold. Other accounts' GPU jobs remain unchanged. Durable
+job and private cloud integration remain pending.
 The [approved public ngrok endpoint](dgx/ngrok.md) now reaches the existing API on
 8010; health and project reads pass. Personal Google administration credentials stay
 on the Mac. The trusted API uses separate scoped runtime identities and protected

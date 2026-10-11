@@ -68,3 +68,14 @@ For a later launch use its recorded process group, not this historical PID.
 
 If a token is exposed, revoke it in the dashboard and configure the replacement
 privately on the DGX. Do not send the replacement through chat or put it in source.
+
+## Owned upstream — 10 October 2026
+
+After the teammate service was removed, Kunal authorized the owned runtime now
+listening on 8010. Backend source `c865730` runs under Kunal's account with body
+weights warm. The existing ngrok agent/URL/Host rewrite are unchanged. Fresh public
+uploads, two keyframe generations and three-frame body motion decoded correctly;
+exact test projects were removed with 204/read 404. Optional football/ground stages
+report partial completion when GPU headroom is insufficient. See [runtime](runtime.md).
+This remains the Debug compatibility service until cloud ownership/storage/job
+integration is complete.
