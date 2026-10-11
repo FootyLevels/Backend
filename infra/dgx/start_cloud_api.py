@@ -4,6 +4,7 @@ import argparse
 import sys
 import subprocess
 import threading
+import signal
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
@@ -19,9 +20,17 @@ if __name__ == "__main__":
     import uvicorn
     # One selected deployment owns one API and one serial CPU worker. Its cloud
     # child uses the same scoped environment; decoders receive a scrubbed one.
-    worker = subprocess.Popen([sys.executable, str(Path(__file__).with_name("run_media_worker.py")), args.environment])
     server = uvicorn.Server(uvicorn.Config("api.cloud:app_factory", factory=True, host="127.0.0.1",
                                          port=args.port, workers=1, access_log=False))
+    # Uvicorn restores/re-raises captured signals after graceful shutdown. The
+    # default SIGTERM action can otherwise terminate Python before our finally
+    # reaps the child, leaving its environment lock held by an orphan worker.
+    def request_stop(signum, frame):
+        server.should_exit = True
+    for sig in (signal.SIGTERM, signal.SIGINT):
+        signal.signal(sig, request_stop)
+    worker = subprocess.Popen([sys.executable, str(Path(__file__).with_name("worker_process.py")),
+        sys.executable, str(Path(__file__).with_name("run_media_worker.py")), args.environment])
     stopped = threading.Event()
     def supervise():
         while not stopped.wait(2):
