@@ -46,3 +46,9 @@ Use the isolated `~/.local/share/footylevels/cloud-api/venv`, separate from all 
 `verify_private_assets_mac.py dev|demo` creates two temporary real accounts on the Mac, sends tokens over SSH stdin only and deletes/verifies their absence afterward. DGX runtime keys remain on DGX; administration ADC remains on the Mac. The remote probe checks real ownership, concurrent operation deduplication, >6 MiB interrupted/resumed upload, stale offsets, path/overwrite denial, exact finalization, signed read expiry/refresh, saved GLB delivery, budgets, cancellation/quarantine/cleanup and deleted-resource denial. Test fixtures are removed, including reservations. The saved GLB delivery uses seeded metadata to test storage; authenticated model-job generation is not claimed.
 
 See `private-assets-evidence.json`. FP-16 wires the iOS upload UI, FP-39 connects actual model output, FP-53 provides durable jobs, and FP-54 prepares media/maintenance. Google interactive sign-in and physical-device checks remain separate FP-14 gates.
+
+### Verified development launcher
+
+The development service is deployed from `f80aab4` at `~/.local/share/footylevels/cloud-api/current`, listening only on `127.0.0.1:8011`. Its log is `cloud-api/logs/dev-api.log` and launch-wrapper PID is recorded in `cloud-api/dev-api.pid`. Verify actual PID ownership and command before any stop/restart; do not use a broad process kill. The server PID at this verification was 3874030; it is not a permanent identifier.
+
+Run `python scripts/verify_private_assets_mac.py dev --http` to verify the deployed loopback HTTP service through SSH. Demo is verified separately with its own runtime configuration via `... demo`; no Demo API listener or new public tunnel was started. Automatic restart and final public monolith integration remain FP-39/55. Model environments and the existing ngrok endpoint were preserved.

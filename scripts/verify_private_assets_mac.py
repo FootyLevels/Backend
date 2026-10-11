@@ -41,7 +41,11 @@ def main():
             if r.status_code != 200:
                 raise RuntimeError(f'Temporary signup HTTP {r.status_code}')
             body = r.json(); owners.append(body['localId']); tokens.append(body['idToken']); emails.append(email)
-        remote = "cd ~/.local/share/footylevels/cloud-api/fp17 && PYTHONPATH=src:. bash ~/.local/share/footylevels/fp50-dns/with_network_dns.sh ~/.local/share/footylevels/cloud-api/venv/bin/python scripts/verify_private_assets_dgx.py ~/.local/share/footylevels/cloud-api/fixture.mp4"
+        remote = "cd ~/.local/share/footylevels/cloud-api/current && PYTHONPATH=src:. bash ~/.local/share/footylevels/fp50-dns/with_network_dns.sh ~/.local/share/footylevels/cloud-api/venv/bin/python scripts/verify_private_assets_dgx.py ~/.local/share/footylevels/cloud-api/fixture.mp4"
+        if len(sys.argv) == 3:
+            if sys.argv[2] != '--http' or environment != 'dev':
+                raise ValueError('HTTP probe is restricted to the private Development API')
+            remote = remote.replace('PYTHONPATH=src:. bash', 'FOOTYLEVELS_ASSET_PROBE_HTTP=http://127.0.0.1:8011 PYTHONPATH=src:. bash')
         # Secrets never appear in process arguments, files or diagnostics.
         result = subprocess.run(['/usr/bin/ssh', '-o', 'BatchMode=yes', '-o', 'ConnectTimeout=10', 'bajajkun@142.55.34.202', remote],
             input=json.dumps({'environment': environment, 'owners': owners, 'tokens': tokens, 'emails': emails}).encode(),
