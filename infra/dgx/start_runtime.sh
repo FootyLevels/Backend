@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Owned compatibility runtime. No sudo, cloud secrets, paid provider or shared edits.
+# Private owned model runtime. The authenticated application API owns public 8010.
 set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 BACKEND_ROOT="$(cd "$SCRIPT_DIR/../.." && pwd)"
@@ -7,7 +7,7 @@ MODEL_ROOT="${FOOTYLEVELS_MODEL_ROOT:-$HOME/skill-lab}"
 RUNTIME_ROOT="$BACKEND_ROOT/runtime/skill_lab"
 export CUDA_VISIBLE_DEVICES="${FOOTYLEVELS_GPU_UUID:?Set FOOTYLEVELS_GPU_UUID to the selected A100 UUID}"
 [[ "$CUDA_VISIBLE_DEVICES" =~ ^GPU-[a-f0-9-]+$ ]] || { echo 'Select exactly one GPU UUID' >&2; exit 64; }
-export PORT="${PORT:-8010}"
+export PORT="${PORT:-8013}"
 export SAM3D_REPO="$MODEL_ROOT/vendor/sam-3d-body"
 export SAM3D_CHECKPOINT="$MODEL_ROOT/checkpoints/sam-3d-body-dinov3/model.ckpt"
 export SAM3_PYTHON="$MODEL_ROOT/.venv-seg/bin/python"

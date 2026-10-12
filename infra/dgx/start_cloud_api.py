@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Independent authenticated API on loopback, until FP-39 integrates model routes."""
+"""Authenticated application API on loopback behind the approved ngrok endpoint."""
 import argparse
 import sys
 import subprocess
@@ -14,7 +14,7 @@ from cloud_config import load
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("environment", choices=["dev", "demo"])
-    parser.add_argument("--port", type=int, default=8011)
+    parser.add_argument("--port", type=int, default=8010)
     parser.add_argument("--reconstruction-adapter", type=Path,
                         help="Explicitly enable the verified private model adapter")
     args = parser.parse_args()

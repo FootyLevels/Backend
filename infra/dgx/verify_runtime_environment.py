@@ -35,7 +35,7 @@ def main():
     for tool in ['ffmpeg', 'ffprobe']:
         subprocess.run([tool, '-version'], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, check=True)
     with socket.socket() as probe:
-        probe.bind(('127.0.0.1', int(os.environ.get('PORT', '8010'))))
+        probe.bind(('127.0.0.1', int(os.environ.get('PORT', '8013'))))
     print(json.dumps({'preflight': 'passed', 'gpu': torch.cuda.get_device_name(0),
                       'freeGiB': round(free / 1024 ** 3, 2), 'totalGiB': round(total / 1024 ** 3, 2),
                       'bodyRevision': revision, 'weightsVerified': True}), flush=True)
