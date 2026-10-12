@@ -21,16 +21,26 @@ sys.path.insert(0, str(ROOT / "src"))
 sys.path.insert(0, str(ROOT / "infra/dgx"))
 
 
-def cleanup(client, jobs, storage, uid, project_id):
+def cleanup(client, jobs, storage, uid, project_id, *, ios_playback_run_id=None):
     from google.cloud import firestore
     from google.cloud.firestore_v1.base_query import FieldFilter
     from footylevels.records import AssetRef, UploadRecord, utc_now
     project = client.collection("projects").document(project_id).get()
-    if not uid.startswith(("fp54-media-", "fp53-model-", "fp39-model-")) or not project.exists or project.to_dict()["ownerId"] != uid:
+    if not project.exists or project.to_dict()["ownerId"] != uid:
+        raise ValueError("Fixture cleanup guard failed")
+    if ios_playback_run_id is not None:
+        # Real Firebase QA users have provider-assigned IDs, not synthetic
+        # prefixes. Require the exact UUID title and a single owned project;
+        # never widen the normal synthetic-fixture cleanup path.
+        validate_ios_cleanup_scope(client.project, uid, project_id, ios_playback_run_id,
+            [(s.id, s.to_dict()) for s in client.collection("projects").where(filter=FieldFilter("ownerId", "==", uid)).stream()])
+    elif not uid.startswith(("fp54-media-", "fp53-model-", "fp39-model-")):
         raise ValueError("Fixture cleanup guard failed")
     active_jobs = list(client.collection("jobs").where(filter=FieldFilter("ownerId", "==", uid)).stream())
     if any(s.to_dict()["status"] == "running" for s in active_jobs):
         raise ValueError("A worker still owns the fixture; keep its private recovery evidence")
+    if any(s.to_dict()["projectId"] != project_id for s in active_jobs):
+        raise ValueError("Fixture jobs cross projects")
     jobs.mark_deleting(uid, project_id)
     uploads = list(client.collection("uploads").where(filter=FieldFilter("ownerId", "==", uid)).stream())
     reservations = list(client.collection("assetReservations").where(filter=FieldFilter("ownerId", "==", uid)).stream())
@@ -78,6 +88,21 @@ def cleanup(client, jobs, storage, uid, project_id):
     if client.collection("users").document(uid).get().exists:
         raise ValueError("Fixture profile remains")
     return {"sourceObjects": len(uploads), "preparedObjects": len(reservations), "absenceVerified": True}
+
+
+def validate_ios_cleanup_scope(environment, uid, project_id, run_id, owned_projects):
+    import re
+    try:
+        canonical = str(uuid.UUID(run_id))
+    except (ValueError, TypeError, AttributeError):
+        raise ValueError("Invalid iOS fixture marker") from None
+    if (environment != "footylevels-dev-20261009" or canonical != run_id
+            or not re.fullmatch(r"[a-zA-Z0-9_-]{1,128}", uid)
+            or len(owned_projects) != 1 or owned_projects[0][0] != project_id
+            or owned_projects[0][1].get("ownerId") != uid
+            or owned_projects[0][1].get("title") != "FP40 iOS " + run_id
+            or owned_projects[0][1].get("source") != "gallery"):
+        raise ValueError("iOS fixture cleanup scope mismatch")
 
 
 def main():
