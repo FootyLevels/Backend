@@ -538,7 +538,8 @@ def test_body_selection_is_persisted_and_pinned_to_canonical_input(cloud):
     assert record.source_asset == media.video
 
 
-def test_authenticated_http_reconstruction_retries_cancel_and_tombstone(cloud):
+@pytest.mark.parametrize('mode', ['keyframes', 'motion'])
+def test_authenticated_http_reconstruction_retries_cancel_and_tombstone(cloud, mode):
     """Real transactions; synthetic verified identities, no sign-in/GPU claims."""
     from fastapi.testclient import TestClient
     from api.cloud import create_app
@@ -564,8 +565,9 @@ def test_authenticated_http_reconstruction_retries_cancel_and_tombstone(cloud):
     api = TestClient(create_app(ScopedRecords(client), FixtureVerifier()))
     own = {'Authorization': 'Bearer ' + uid}
     foreign = {'Authorization': 'Bearer ' + other}
-    path = f'/api/projects/{project.id}/reconstructions/keyframes'
-    body = {'inputRevision': project.input_revision, 'keyframes': [{'frameIndex': 15, 'bbox': [.1, .1, .9, .9]}]}
+    path = f'/api/projects/{project.id}/reconstructions/{mode}'
+    body = {'inputRevision': project.input_revision, **({'keyframes': [{'frameIndex': 15, 'bbox': [.1, .1, .9, .9]}]}
+        if mode == 'keyframes' else {'segment': {'startFrame': 0, 'endFrame': 30}})}
     with ThreadPoolExecutor(max_workers=2) as pool:
         responses = list(pool.map(lambda _: api.post(path, headers=own, json=body), range(2)))
     assert [r.status_code for r in responses] == [202, 202]
@@ -573,8 +575,13 @@ def test_authenticated_http_reconstruction_retries_cancel_and_tombstone(cloud):
     assert responses[1].json()['id'] == identifier
     assert responses[0].headers['Location'] == '/api/jobs/' + identifier
     durable = repo.get_job(uid, identifier)
-    assert durable.source_asset == media.video and durable.keyframes[0].frame_index == 15
-    changed = {**body, 'keyframes': [{'frameIndex': 16, 'bbox': [.1, .1, .9, .9]}]}
+    assert durable.source_asset == media.video
+    if mode == 'keyframes':
+        assert durable.keyframes[0].frame_index == 15
+    else:
+        assert durable.motion_segment.start_frame == 0 and durable.motion_segment.end_frame == 30
+    changed = {**body, **({'keyframes': [{'frameIndex': 16, 'bbox': [.1, .1, .9, .9]}]}
+        if mode == 'keyframes' else {'segment': {'startFrame': 15, 'endFrame': 45}})}
     assert api.post(path, headers=own, json=changed).status_code == 409
     assert api.post(path, headers=foreign, json=body).status_code == 404
     assert api.get('/api/jobs/' + identifier, headers=foreign).status_code == 404

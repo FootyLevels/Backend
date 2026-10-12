@@ -57,6 +57,7 @@ def test_legacy_job_documents_remain_readable_during_body_profile_upgrade():
     job = JobRecord(id='j', owner_id='u', project_id='p', kind='prepareMedia', input_revision=2,
         input_hash='a'*64, profile_version='media-720p30-v1', source_asset=asset())
     assert 'keyframes' not in job.document()  # old strict workers do not know it
+    assert 'motionSegment' not in job.document()
     assert JobRecord.model_validate(job.document()) == job
     body = job.model_copy(update={'kind':'reconstructKeyframes', 'profile_version':'body-keyframes-v1',
         'keyframes':(KeyframeInput(frame_index=15, bbox=(0,0,1,1)),)})

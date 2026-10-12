@@ -203,10 +203,10 @@ def reconstruction_request(setup):
                           previews=(MediaPreview(asset=preview, timestamp=0, frame_index=0),))
     records.projects[project.id] = project.model_copy(update={'state': 'ready', 'video': original,
                                                             'prepared_media': media})
-    def enqueue(uid, pid, revision, kind, digest, profile, *, keyframes):
+    def enqueue(uid, pid, revision, kind, digest, profile, *, keyframes=None, motion_segment=None):
         return JobRecord(id='f'*64, owner_id=uid, project_id=pid, input_revision=revision,
             kind=kind, input_hash=digest, profile_version=profile, source_asset=canonical,
-            keyframes=keyframes, lease_token='private-token', worker_id='private-worker')
+            keyframes=keyframes, motion_segment=motion_segment, lease_token='private-token', worker_id='private-worker')
     records.enqueue_reconstruction = Mock(side_effect=enqueue)
     body = {'inputRevision': 1, 'keyframes': [{'frameIndex': 15, 'bbox': [.1, .1, .9, .9]}]}
     return client, records, project.id, body
@@ -286,3 +286,39 @@ def test_reconstruction_accepts_limit_and_last_canonical_frame(reconstruction_re
     response = client.post(f'/api/projects/{pid}/reconstructions/keyframes', headers=headers('alice'), json=body)
     assert response.status_code == 202
     assert len(response.json()['keyframes']) == 24
+
+
+def test_motion_request_pins_segment_source_and_server_profile(reconstruction_request):
+    from footylevels.model_requests import MOTION_PROFILE, motion_input_hash
+    from footylevels.records import MotionSegment
+    client, records, pid, _ = reconstruction_request
+    body = {'inputRevision': 1, 'segment': {'startFrame': 15, 'endFrame': 60}}
+    response = client.post(f'/api/projects/{pid}/reconstructions/motion', headers=headers('alice'), json=body)
+    assert response.status_code == 202
+    segment = MotionSegment(start_frame=15, end_frame=60)
+    source = records.projects[pid].prepared_media.video
+    records.enqueue_reconstruction.assert_called_once_with('alice', pid, 1, 'reconstructMotion',
+        motion_input_hash(source, segment), MOTION_PROFILE, motion_segment=segment)
+    assert response.json()['motionSegment'] == body['segment']
+    assert not {'leaseToken', 'workerId', 'leaseExpiresAt'} & response.json().keys()
+
+
+@pytest.mark.parametrize('segment', [
+    {'startFrame': -1, 'endFrame': 30}, {'startFrame': 0, 'endFrame': 29},
+    {'startFrame': 0, 'endFrame': 301}, {'startFrame': 15, 'endFrame': 61},
+    {'startFrame': True, 'endFrame': 31}, {'startFrame': '0', 'endFrame': 30},
+    {'startFrame': 30, 'endFrame': 30}, {'startFrame': 0, 'endFrame': 30, 'fps': 60},
+])
+def test_motion_request_rejects_unbounded_or_out_of_video_segment(reconstruction_request, segment):
+    client, records, pid, _ = reconstruction_request
+    assert client.post(f'/api/projects/{pid}/reconstructions/motion', headers=headers('alice'),
+        json={'inputRevision': 1, 'segment': segment}).status_code == 422
+    records.enqueue_reconstruction.assert_not_called()
+
+
+@pytest.mark.parametrize('token,status', [(None, 401), ('expired', 401), ('bob', 404), ('outage', 503)])
+def test_motion_request_checks_identity_and_ownership(reconstruction_request, token, status):
+    client, records, pid, _ = reconstruction_request
+    assert client.post(f'/api/projects/{pid}/reconstructions/motion', headers=headers(token) if token else {},
+        json={'inputRevision': 1, 'segment': {'startFrame': 0, 'endFrame': 30}}).status_code == status
+    records.enqueue_reconstruction.assert_not_called()

@@ -63,12 +63,13 @@ def provenance():
 
 
 class Bridge:
-    def __init__(self, root, executor, infer, metadata, *, inference_seconds=180, fatal=None):
+    def __init__(self, root, executor, infer, metadata, *, inference_seconds=180, fatal=None, motion=None):
         self.root, self.executor, self.infer, self.metadata = Path(root), executor, infer, metadata
         self.inference_seconds = inference_seconds
         self.fatal = fatal or (lambda: os._exit(1))
         self.lock, self.tasks = threading.RLock(), {}
         self.calls = 0
+        self.motion = motion
         self.root.mkdir(parents=True, exist_ok=True, mode=0o700)
         self.root.chmod(0o700)
         self.cache = self.root / "cache"
@@ -194,9 +195,13 @@ class Bridge:
                     if request == {"op": "health"}:
                         with bridge.lock:
                             send(self.request, {"status": "ok", "inferenceCalls": bridge.calls,
-                                "activeRequests": sum(not task.done() for task in bridge.tasks.values()), **bridge.metadata})
+                                "activeRequests": sum(not task.done() for task in bridge.tasks.values())
+                                    + (bridge.motion.active() if bridge.motion else 0),
+                                "motionCalls": bridge.motion.calls if bridge.motion else 0,
+                                "motionEnabled": bridge.motion is not None, **bridge.metadata})
                         return
-                    future = bridge.submit(request)
+                    motion = bridge.motion if isinstance(request, dict) and request.get('op') == 'motion' else None
+                    future = motion.submit(request) if motion else bridge.submit(request)
                     while True:
                         try:
                             response = future.result(timeout=.1)
@@ -207,7 +212,8 @@ class Bridge:
                                 # Queued work can be cancelled; an in-flight GPU
                                 # call finishes into private cache only. The same
                                 # serial executor prevents overlapping attempts.
-                                future.cancel()
+                                if motion: motion.cancel(future)
+                                else: future.cancel()
                                 return
                     send(self.request, response)
                 except (ConnectionError, OSError):
@@ -239,6 +245,8 @@ class Bridge:
             raise
 
     def close(self):
+        if self.motion:
+            self.motion.close()
         self.server.shutdown()
         self.server.server_close()
         self.thread.join(timeout=5)
@@ -250,6 +258,11 @@ def start_owned_bridge():
     from . import jobs
     from .providers.local import LocalProvider
     root = Path.home() / ".local/share/footylevels/model-bridge"
-    bridge = Bridge(root, jobs.EXECUTOR, LocalProvider().reconstruct, provenance())
+    metadata = provenance()
+    motion = None
+    if os.getenv('FOOTYLEVELS_MOTION_BRIDGE') == '1':
+        from .motion_bridge import start_tasks
+        motion = start_tasks(root, jobs.EXECUTOR, metadata)
+    bridge = Bridge(root, jobs.EXECUTOR, LocalProvider().reconstruct, metadata, motion=motion)
     bridge.start()
     return bridge

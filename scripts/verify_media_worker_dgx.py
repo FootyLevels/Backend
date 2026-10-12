@@ -26,7 +26,7 @@ def cleanup(client, jobs, storage, uid, project_id):
     from google.cloud.firestore_v1.base_query import FieldFilter
     from footylevels.records import AssetRef, UploadRecord, utc_now
     project = client.collection("projects").document(project_id).get()
-    if not uid.startswith(("fp54-media-", "fp53-model-")) or not project.exists or project.to_dict()["ownerId"] != uid:
+    if not uid.startswith(("fp54-media-", "fp53-model-", "fp39-model-")) or not project.exists or project.to_dict()["ownerId"] != uid:
         raise ValueError("Fixture cleanup guard failed")
     active_jobs = list(client.collection("jobs").where(filter=FieldFilter("ownerId", "==", uid)).stream())
     if any(s.to_dict()["status"] == "running" for s in active_jobs):

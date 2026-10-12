@@ -124,6 +124,7 @@ class JobRecord(Record):
     profile_version: str = Field(min_length=1, max_length=80)
     source_asset: AssetRef
     keyframes: tuple["KeyframeInput", ...] | None = Field(default=None, min_length=1, max_length=24)
+    motion_segment: "MotionSegment | None" = None
     status: Literal["queued", "running", "retrying", "succeeded", "partial", "failed", "cancelled"] = "queued"
     stage: str = Field(default="queued", min_length=1, max_length=80)
     attempt_count: int = Field(default=0, ge=0)
@@ -145,6 +146,8 @@ class JobRecord(Record):
         # prepareMedia/legacy jobs. Only the new body profile needs this field.
         if self.keyframes is None:
             payload.pop("keyframes", None)
+        if self.motion_segment is None:
+            payload.pop("motionSegment", None)
         return payload
 
 
@@ -158,6 +161,18 @@ class KeyframeInput(Metadata):
         left, top, right, bottom = self.bbox
         if not all(math.isfinite(n) and 0 <= n <= 1 for n in self.bbox) or right-left < .03 or bottom-top < .03:
             raise ValueError("Use normalized left/top/right/bottom with positive area")
+        return self
+
+
+class MotionSegment(Metadata):
+    start_frame: int = Field(ge=0, lt=1802, strict=True)
+    end_frame: int = Field(gt=0, le=1802, strict=True)
+
+    @model_validator(mode="after")
+    def bounded_segment(self):
+        # End is exclusive: 1–10 seconds of canonical 30 fps playback.
+        if not 30 <= self.end_frame - self.start_frame <= 300:
+            raise ValueError("Select a motion segment between one and ten seconds")
         return self
 
 

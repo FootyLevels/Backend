@@ -52,10 +52,13 @@ def main():
             translation = np.asarray(result['pred_cam_t'], np.float32).reshape(3)
             if not np.isfinite(vertices).all() or not np.isfinite(translation).all():
                 raise ValueError('Non-finite reconstruction')
-            np.savez_compressed(path, vertices=vertices, translation=translation,
-                focal=np.asarray(result['focal_length']).reshape(-1)[0],
-                joints=np.asarray(result['pred_keypoints_3d']),
-                keypoints2d=np.asarray(result['pred_keypoints_2d']))
+            temporary = path.with_suffix('.tmp')
+            with temporary.open('wb') as checkpoint:
+                np.savez_compressed(checkpoint, vertices=vertices, translation=translation,
+                    focal=np.asarray(result['focal_length']).reshape(-1)[0],
+                    joints=np.asarray(result['pred_keypoints_3d']),
+                    keypoints2d=np.asarray(result['pred_keypoints_2d']))
+            temporary.replace(path)
         except Exception as exc:
             failures.append({'index': i, 'error': type(exc).__name__})
             print(f'Frame {i} failed: {exc}', flush=True)

@@ -1,7 +1,8 @@
 # Reconstruction requests (FP-39)
 
-The authenticated application API accepts keyframe requests and uses the existing
-durable reconstruction worker. Whole-motion integration is still in progress.
+The authenticated application API accepts keyframe and bounded motion requests
+through the existing durable reconstruction worker. Motion deployment verification
+is in progress; local fake-inference checks are separate from actual GPU evidence.
 The legacy model API on port 8010 is a separate compatibility service; the new
 authenticated API currently runs on loopback port 8011.
 
@@ -61,6 +62,51 @@ deleted and inaccessible resources return **404**. Missing/invalid sign-in retur
 or unavailable metadata/auth services **503**. Responses are private and not cached.
 The transaction rechecks revision/source/ownership after the API reads the project.
 
+## Request body motion
+
+Submit `POST /api/projects/{id}/reconstructions/motion` with the same verified
+identity and current prepared input revision:
+
+```json
+{"inputRevision": 2, "segment": {"startFrame": 15, "endFrame": 45}}
+```
+
+The start is inclusive, end exclusive, and both use canonical 30 fps frame indices.
+Choose 30–300 frames (1–10 seconds) inside the prepared video. This bounds model
+time, temporary disk use and the free-storage output count. The server derives
+`body-motion-30fps-v1` and an immutable source/segment hash. The response, polling,
+cancellation, retry identity, ownership and publication fences match keyframes.
+
+The private adapter trims the exact segment and sends its verified local file to
+the owned model bridge. Motion and keyframes share one serial executor. The warm
+body estimator is released before SAM 3 tracking and SAM 3D Body subprocesses run
+sequentially on the same selected GPU, then restored afterward. No model process
+receives cloud credentials. Each stage has a wall limit, a 2 GiB workspace limit
+and a supervisor that stops its process group on cancellation or runtime parent loss.
+The segment's private cache is keyed by job/input/model provenance, allowing raw
+checkpoints or completed output to survive a retry without acquiring publication rights.
+Raw pose checkpoints are committed atomically so a crash cannot expose a partial NPZ
+as a valid cached pose. Completed raw/mask files are removed after a replayable result
+is committed; at most two inactive motion entries are retained (24-hour expiry on new work).
+
+This profile reuses the existing dominant-subject SAM tracking and compressed
+Swift playback format. It produces `sequence.json`, shared `faces.bin`, independent
+one-second gzip body chunks, six JPEG previews and a trimmed playback `video.mp4`.
+The manifest keeps local segment times for the existing player and adds exact
+original `sourceFrameIndex`/`sourceTimestamp` values plus `sourceTimeOffset`.
+It pins engine, body/segmentation checkpoint hashes, topology, coordinates and
+estimated metric units. Each frame declares validity and shot ID; smoothing never
+crosses a shot cut or missing pose. Missing body frames are `partial`, and zero
+valid bodies fails. The adapter verifies topology indices/hash, complete chunk
+coverage, bounded decompression, timestamps and validity before publication.
+
+The person is the largest foreground candidate at each shot seed, followed by a
+persistent SAM track within that shot. This is declared selection behavior, not
+verified identity in crowded footage. Ball processing is optional and not requested
+by this body-only profile; no ground calibration or measured scale is claimed.
+`optionalAssets` declares these omissions explicitly. No execution correctness,
+score or AQA is generated.
+
 ## Verification scope
 
 HTTP tests exercise authorization, account restrictions, source derivation, input
@@ -70,4 +116,9 @@ lease redaction, cancellation, paused intake and deletion fences; its exact rand
 fixtures are removed. This does not verify real Firebase sign-in or iOS playback.
 Actual GPU/private-storage generation and recovery are separately verified in
 `reconstruction-jobs.md`. FP-39 remains open for motion artifacts and integration;
-FP-19/40 still supply the durable mobile flow and device verification.
+FP-19/40 still supply the durable mobile flow and device verification. Motion IPC
+tests use fake inference with real decoding/packing, check cancellation and serial
+execution, and verify stage-group cleanup after timeout, termination and parent loss.
+The opt-in `scripts/verify_motion_dgx.py` is the separate actual-GPU/private-storage
+probe, using a permitted source and synthetic verified HTTP identity; it never
+creates a real Firebase account or claims physical-device end-to-end coverage.

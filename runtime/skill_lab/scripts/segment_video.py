@@ -24,11 +24,14 @@ def main():
     p = argparse.ArgumentParser()
     p.add_argument('project_dir', type=Path)
     p.add_argument('--checkpoint', type=Path, required=True)
+    p.add_argument('--body-only', action='store_true', help='Skip optional ball tracking')
     a = p.parse_args()
     project = json.loads((a.project_dir / 'project.json').read_text())
     root = a.project_dir / 'motion'
     root.mkdir(exist_ok=True)
     cuts, count = shot_boundaries(a.project_dir / 'video.mp4')
+    if project['video'].get('frameCount', count) != count:
+        raise ValueError('Decoded segment does not match canonical frame count')
     source = root / 'source'
     source.mkdir(exist_ok=True)
     cap = cv2.VideoCapture(str(a.project_dir / 'video.mp4'))
@@ -50,7 +53,7 @@ def main():
             target = folder / f'{i - start:06d}.jpg'
             if not target.exists():
                 os.link(source / f'{i:06d}.jpg', target)
-        for kind, prompt in [('person', 'person'), ('ball', 'soccer ball')]:
+        for kind, prompt in [('person', 'person')] + ([] if a.body_only else [('ball', 'soccer ball')]):
             (root / 'masks' / kind).mkdir(parents=True, exist_ok=True)
             session = predictor.handle_request({'type': 'start_session', 'resource_path': str(folder),
                                                  'offload_video_to_cpu': True})['session_id']
@@ -96,6 +99,9 @@ def main():
         checkpoint = {'model': 'Meta SAM 3', 'fps': project['video']['fps'],
                       'frameCount': count, 'cuts': cuts, 'frames': records,
                       'selection': 'largest subject at seed, persistent track ID within each shot'}
+        if a.body_only:
+            for record in records[start:end]:
+                record['ball'] = None
         (root / 'tracking.json').write_text(json.dumps(checkpoint, indent=2))
     predictor.shutdown()
     print('Segmentation complete:', root / 'tracking.json', flush=True)

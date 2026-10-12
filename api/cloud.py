@@ -13,8 +13,8 @@ from pydantic import Field, model_validator
 
 from footylevels.authentication import (AuthenticationRejected,
     AuthenticationUnavailable, FirebaseIdentityVerifier, Identity)
-from footylevels.model_requests import BODY_PROFILE, body_input_hash
-from footylevels.records import Id, KeyframeInput, Metadata
+from footylevels.model_requests import BODY_PROFILE, MOTION_PROFILE, body_input_hash, motion_input_hash
+from footylevels.records import Id, KeyframeInput, Metadata, MotionSegment
 from footylevels.repositories import (FirestoreRecords, RecordConflict, RecordNotFound,
                                      RecordUnavailable, reconstruction_source)
 
@@ -38,6 +38,11 @@ class ReconstructKeyframes(Metadata):
         if len({frame.frame_index for frame in self.keyframes}) != len(self.keyframes):
             raise ValueError("Select each canonical frame only once")
         return self
+
+
+class ReconstructMotion(Metadata):
+    input_revision: int = Field(ge=1, strict=True)
+    segment: MotionSegment
 
 
 def public_job(record):
@@ -157,6 +162,21 @@ def create_app(records, verifier, lifespan=None, *, assets=None, uploads=None) -
         record = records.enqueue_reconstruction(user.uid, project_id, body.input_revision,
             "reconstructKeyframes", body_input_hash(reconstruction_source(project), body.keyframes),
             BODY_PROFILE, keyframes=body.keyframes)
+        response.headers["Location"] = f"/api/jobs/{record.id}"
+        return public_job(record)
+
+    @app.post("/api/projects/{project_id}/reconstructions/motion", status_code=202)
+    def reconstruct_motion(project_id: Id, body: ReconstructMotion, response: Response,
+                           user: Identity = Depends(active_identity)):
+        project = records.get_project(user.uid, project_id)
+        media = project.prepared_media
+        if project.state != "ready" or media is None or project.input_revision != body.input_revision:
+            raise RecordConflict("Wait for prepared media or refresh the project")
+        if body.segment.end_frame > media.frame_count:
+            raise HTTPException(422, "Motion segment is outside prepared playback")
+        record = records.enqueue_reconstruction(user.uid, project_id, body.input_revision,
+            "reconstructMotion", motion_input_hash(reconstruction_source(project), body.segment),
+            MOTION_PROFILE, motion_segment=body.segment)
         response.headers["Location"] = f"/api/jobs/{record.id}"
         return public_job(record)
 
