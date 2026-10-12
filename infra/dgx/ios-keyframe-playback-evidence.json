@@ -1,0 +1,22 @@
+{
+  "ticket": "FP-40", "verifiedDate": "2026-10-12", "environment": "dev",
+  "frontendImplementation": "9b6af53", "backendCleanupImplementation": "d12998c",
+  "cloudRelease": "e43109d", "modelRelease": "4017f11",
+  "identity": "Real temporary Firebase SDK Development email account",
+  "preparedFrames": 60,
+  "generation": {"mode": "keyframes", "attempt": 1, "status": "succeeded",
+    "frameIndices": [0, 15], "sourceTimes": [0, 0.5], "validFrames": 2,
+    "verticesPerPose": 18439, "facesPerPose": 36874, "artifacts": 3},
+  "realIosSimulatorPlayer": {"liveTestPassed": true, "poseInspectorReady": true,
+    "privateFilesValidated": true, "exactVideoSeekAndFrameImagesVerified": true},
+  "fixtureCleanup": {"accountsAbsentVerified": true, "sourceObjects": 1, "preparedObjects": 7,
+    "resultObjects": 3, "totalObjects": 11, "privateModelCacheEntries": 2,
+    "metadataAndObjectsAbsentVerified": true, "ownerQuotaReleased": true,
+    "globalReservedBytes": 0, "writersQuiescent": true},
+  "afterCleanup": {"mediaStaging": 0, "gpuStaging": 0, "cacheEntries": 0,
+    "cloudHealthy": true, "publicCompatibilityHealthy": true, "bodyModelWarm": true},
+  "limits": {"physicalIPhoneVerified": false, "interactiveGoogleLoginVerified": false,
+    "publicAuthenticatedRouteVerified": false, "fullInteractiveAppEndToEndVerified": false},
+  "runtimeChanged": false, "otherUsersGpuProcessesChanged": false,
+  "billingLinked": false, "commitsPushed": false
+}
