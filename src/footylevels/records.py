@@ -262,3 +262,13 @@ class UploadRecord(Record):
     cleanup_after: AwareDatetime
     committed_revision: int | None = Field(default=None, ge=2)
     reserved_bytes: int = Field(default=52428800, ge=0, le=52428800)
+
+
+class DeletionRecord(Record):
+    owner_id: Id
+    scope: Literal["project", "account"]
+    project_id: Id | None = None
+    state: Literal["pending", "completed"] = "pending"
+    not_before: AwareDatetime = Field(default_factory=utc_now)
+    completed_at: AwareDatetime | None = None
+    last_error: Literal["cleanup_unavailable", "reconciliation_required"] | None = None

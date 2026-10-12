@@ -74,7 +74,10 @@ def cleanup(client, jobs, storage, uid, project_id, *, ios_playback_run_id=None)
         for snapshot in [*uploads, *reservations]:
             transaction.delete(snapshot.reference)
     jobs._run(release)
-    for collection in ["jobs", "projects", "reconstructions"]:
+    deletion_records = list(client.collection("deletions").where(filter=FieldFilter("ownerId", "==", uid)).stream())
+    if any(s.to_dict().get("scope") != "project" or s.to_dict().get("projectId") != project_id for s in deletion_records):
+        raise ValueError("Fixture deletion intent crosses its project scope")
+    for collection in ["jobs", "projects", "reconstructions", "deletions"]:
         for snapshot in client.collection(collection).where(filter=FieldFilter("ownerId", "==", uid)).stream():
             snapshot.reference.delete()
     client.collection("users").document(uid).delete()
@@ -82,7 +85,7 @@ def cleanup(client, jobs, storage, uid, project_id, *, ios_playback_run_id=None)
     if owner_usage["bytes"] != 0:
         raise ValueError("Fixture quota not released")
     ledgers[1].delete()
-    for collection in ["jobs", "projects", "reconstructions", "uploads", "assetReservations"]:
+    for collection in ["jobs", "projects", "reconstructions", "uploads", "assetReservations", "deletions"]:
         if list(client.collection(collection).where(filter=FieldFilter("ownerId", "==", uid)).limit(1).stream()):
             raise ValueError("Fixture records remain")
     if client.collection("users").document(uid).get().exists:

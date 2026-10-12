@@ -52,7 +52,7 @@ def public_job(record):
                              exclude={"lease_token", "worker_id", "lease_expires_at"})
 
 
-def create_app(records, verifier, lifespan=None, *, assets=None, uploads=None) -> FastAPI:
+def create_app(records, verifier, lifespan=None, *, assets=None, uploads=None, deletions=None) -> FastAPI:
     app = FastAPI(title="FootyLevels", version="0.3.0", lifespan=lifespan)
 
     @app.middleware("http")
@@ -142,9 +142,28 @@ def create_app(records, verifier, lifespan=None, *, assets=None, uploads=None) -
 
     @app.delete("/api/projects/{project_id}", status_code=202)
     def delete(project_id: Id, user: Identity = Depends(active_identity)):
+        if deletions is not None:
+            intent = deletions.begin_project(user.uid, project_id)
+            return {"id": project_id, "state": "deleted" if intent.state == "completed" else "deleting",
+                    "deletionId": intent.id}
         record = records.mark_deleting(user.uid, project_id)
         # This is an accepted tombstone; blob cleanup is implemented in FP-17/54.
         return {"id": record.id, "state": record.state}
+
+    if deletions is not None:
+        # Identity still works for cleanup progress after account-data deletion
+        # disables ordinary app access. These responses contain no asset paths.
+        @app.get("/api/deletions")
+        def pending_deletions(user: Identity = Depends(identity)):
+            return {"items": deletions.list_progress(user.uid)}
+
+        @app.get("/api/deletions/{deletion_id}")
+        def deletion_progress(deletion_id: Id, user: Identity = Depends(identity)):
+            return deletions.progress(user.uid, deletion_id)
+
+        @app.delete("/api/me/data", status_code=202)
+        def delete_account_data(user: Identity = Depends(identity)):
+            return deletions.begin_account(user.uid)
 
     @app.get("/api/jobs/{job_id}")
     def job(job_id: Id, user: Identity = Depends(active_identity)):
@@ -234,4 +253,6 @@ def app_factory() -> FastAPI:
             client.close()
             delete_app(firebase)
 
-    return create_app(FirestoreRecords(client), verifier, lifespan, assets=storage)
+    from footylevels.deletions import FirestoreDeletions
+    return create_app(FirestoreRecords(client), verifier, lifespan, assets=storage,
+                      deletions=FirestoreDeletions(client))

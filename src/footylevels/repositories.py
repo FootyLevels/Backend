@@ -17,7 +17,7 @@ from google.api_core import exceptions
 from google.cloud.firestore_v1.base_query import FieldFilter
 from pydantic import TypeAdapter
 
-from .records import (AssetRef, ComparisonRecord, Id, JobRecord, ProjectRecord,
+from .records import (AssetRef, ComparisonRecord, DeletionRecord, Id, JobRecord, ProjectRecord,
                       ReconstructionRecord, ReferenceRecord, UserRecord, utc_now)
 
 
@@ -119,13 +119,12 @@ class FirestoreRecords:
         ref = self.client.collection("projects").document(identifier)
         record = ProjectRecord(id=ref.id, owner_id=uid, title=title, source=source, label=label,
                                creation_hash=digest if key else None)
-        if key is None:
-            ref.create(record.document())
-            return record
-
         @firestore.transactional
         def create(transaction):
+            account = self._ref("users", uid).get(transaction=transaction)
             snapshot = ref.get(transaction=transaction)
+            if account.exists and account.to_dict().get("accountState") != "active":
+                raise RecordConflict("Account is unavailable")
             if snapshot.exists:
                 existing = self._owned(self._record(snapshot, ProjectRecord), uid)
                 if existing.creation_hash != digest:
@@ -215,19 +214,28 @@ class FirestoreRecords:
 
     def mark_deleting(self, uid: str, project_id: str) -> ProjectRecord:
         ref = self._ref("projects", project_id)
+        from .deletions import deletion_id
+        deletion_ref = self._ref("deletions", deletion_id(uid, project_id))
 
         @firestore.transactional
         def delete(transaction):
             existing = self._record(ref.get(transaction=transaction), ProjectRecord)
+            deletion = deletion_ref.get(transaction=transaction)
             if existing.owner_id != uid:
                 raise RecordNotFound()
-            if existing.state in {"deleting", "deleted"}:
+            if existing.state == "deleted":
+                return existing
+            if existing.state == "deleting" and deletion.exists:
                 return existing
             job_ref = self._ref("jobs", existing.active_job_id) if existing.active_job_id else None
             job = self._record(job_ref.get(transaction=transaction), JobRecord) if job_ref else None
             if job and (job.owner_id != uid or job.project_id != project_id):
                 raise RecordConflict("Active job does not belong to the project")
             now = utc_now()
+            if not deletion.exists:
+                transaction.create(deletion_ref, DeletionRecord(id=deletion_ref.id, owner_id=uid,
+                    scope="project", project_id=project_id,
+                    not_before=(existing.deleted_at or now) + timedelta(minutes=5)).document())
             record = ProjectRecord.model_validate({**existing.document(), "state": "deleting", "deletedAt": now,
                                                   "updatedAt": now, "activeJobId": None, "activeUploadId": None})
             transaction.set(ref, record.document())
@@ -388,8 +396,21 @@ class FirestoreRecords:
 
     def create_comparison(self, record: ComparisonRecord, uid: str) -> ComparisonRecord:
         self._comparison_access(record, uid)
-        self._ref("comparisons", record.id).create(record.document())
-        return record
+        @firestore.transactional
+        def create(transaction):
+            results = [record.left_reconstruction_id]
+            if record.right_type == "reconstruction":
+                results.append(record.right_id)
+            # Recheck both project tombstones in the same transaction as the
+            # comparison write; a preflight read alone can race final cleanup.
+            for identifier in results:
+                result = self._owned(self._record(self._ref("reconstructions", identifier).get(
+                    transaction=transaction), ReconstructionRecord), uid)
+                self._owned(self._record(self._ref("projects", result.project_id).get(
+                    transaction=transaction), ProjectRecord), uid)
+            transaction.create(self._ref("comparisons", record.id), record.document())
+            return record
+        return self._transact(create)
 
     def get_comparison(self, uid: str, comparison_id: str) -> ComparisonRecord:
         record = self._record(self._ref("comparisons", comparison_id).get(), ComparisonRecord)

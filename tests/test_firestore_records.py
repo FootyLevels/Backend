@@ -53,7 +53,7 @@ def cloud():
     finally:
         # Only this invocation's random fixture owners and exact reference ID.
         for owner in [uid, other]:
-            for collection in ["comparisons", "reconstructions", "jobs", "projects", "uploads", "assetReservations"]:
+            for collection in ["comparisons", "reconstructions", "jobs", "projects", "uploads", "assetReservations", "deletions"]:
                 for snapshot in client.collection(collection).where(filter=FieldFilter("ownerId", "==", owner)).stream():
                     snapshot.reference.delete()
             client.collection("users").document(owner).delete()

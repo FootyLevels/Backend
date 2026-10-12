@@ -12,6 +12,7 @@ import threading
 import time
 import uuid
 from datetime import timedelta
+from google.api_core.exceptions import GoogleAPICallError
 
 ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT / "src"))
@@ -43,6 +44,8 @@ def reconcile(jobs, storage, cursors):
                     cleaned += 1
                 except (RecordConflict, RecordNotFound):
                     pass
+    from footylevels.deletions import FirestoreDeletions
+    cleaned += FirestoreDeletions(jobs.client).reconcile_deletions(storage, cursors)
     return cleaned
 
 
@@ -106,7 +109,7 @@ def main():
                     cleaned = reconcile(jobs, storage, maintenance_cursors)
                     if cleaned:
                         print(json.dumps({"service": "media-worker", "cleaned": cleaned}), flush=True)
-                except StorageUnavailable:
+                except (StorageUnavailable, GoogleAPICallError):
                     print(json.dumps({"service": "media-worker", "outcome": "temporarily-unavailable"}), flush=True)
                 if args.once:
                     break
