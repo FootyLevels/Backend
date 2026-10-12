@@ -1,5 +1,14 @@
 # FootyLevels ngrok endpoint
 
+## Current routing — 12 October 2026
+
+The same approved agent, HTTPS URL, upstream port 8010 and Host rewrite now reach
+the authenticated Development application API. The GPU HTTP listener moved to
+private loopback 8013; workers still use its private Unix bridge. See
+[current deployment and recovery](public-api.md). The installation and earlier
+compatibility-service observations below are historical; the public address no
+longer exposes the legacy shared project/media routes.
+
 Kunal supplied the reserved URL
 `https://ranting-pesticide-thespian.ngrok-free.dev` and the dashboard command:
 

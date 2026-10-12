@@ -1,35 +1,21 @@
 # Reconstruction runtime — FP-52
 
-## Current Development integration — 11 October 2026
+## Current Development integration — 12 October 2026
 
-The owned warm model runtime now runs `429deeb` on loopback 8010, with the same
-approved ngrok endpoint and host rewrite. A private Unix bridge shares its existing
-serial body/motion executor. It uses no cloud credentials and loads no second model.
-The authenticated API on loopback 8011 runs `8abf8d9`, supervising one CPU media
-worker and one durable reconstruction dispatcher. See
-[durable jobs and recovery](../../docs/reconstruction-jobs.md) for the verified
-selected-frame adapter, cancellation, cache replay and real GPU/private publication.
-The public authenticated API, whole-motion adapter and new iOS flow remain pending.
+The approved public endpoint now serves the **authenticated Development API** on
+loopback **8010**. The owned model runtime listens privately on loopback **8013**;
+its owner-only Unix inference bridge is unchanged. Cloud source `e43109d` supervises
+one CPU media worker and one durable reconstruction dispatcher; model source
+`4017f11` supplies selected poses and whole-motion output through that bridge.
+The body model is warm, and no second GPU model process was added. The launcher
+source defaults now match these ports; the deployed releases use explicit ports.
 
-The owned runtime's launcher/current symlink recovery instructions below still
-apply; set `FOOTYLEVELS_RUNTIME_REVISION=429deeb`. The private inference watchdog
-exits only this owned model process after a 180-second hang. An operator must
-restart it, while Firestore attempts recover or reach their bounded failure.
-The cloud deployment is launched through the isolated DNS wrapper with its existing
-private configuration and this explicit adapter flag:
-
-```sh
-release="$HOME/.local/share/footylevels/cloud-api/current"
-~/.local/share/footylevels/fp50-dns/with_network_dns.sh \
-  ~/.local/share/footylevels/cloud-api/venv/bin/python \
-  "$release/infra/dgx/start_cloud_api.py" dev --port 8011 \
-  --reconstruction-adapter "$release/infra/dgx/body_keyframes_adapter.py"
-```
-
-Use it after stopping the verified owned deployment, not alongside its existing
-workers. The launcher pins absolute model-socket and FFmpeg paths before scrubbing
-the adapter environment; UID/passwd lookup inside the DNS user namespace returns
-`/root` rather than the real account's home. Demo remains unchanged.
+See [public route and recovery](public-api.md) for launch commands and boundaries.
+The original sections below are historical observations, including previous ports
+and releases. They must not be used as the current deployment map. Real private
+simulator motion and pose proofs passed before this public migration; their
+recorded loopback evidence remains valid for those separate runs. Physical iPhone,
+interactive Google sign-in and the complete app acceptance remain open.
 
 ## Owned runtime takeover — 10 October 2026
 
