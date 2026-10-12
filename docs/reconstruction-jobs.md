@@ -113,11 +113,15 @@ The cloud launcher enables the serial dispatcher only when explicitly given
 `--reconstruction-adapter /absolute/release/infra/dgx/body_keyframes_adapter.py`.
 It supervises both workers and reaps them on shutdown. This adds no public model
 route or ngrok traffic policy. Whole-motion adapters and authenticated request/UI
-integration are documented in `reconstruction-api.md`; the FP-39 candidate uses
+integration are documented in `reconstruction-api.md`; the FP-39 deployment uses
 `reconstruction_adapter.py` to dispatch keyframes or bounded body-motion segments.
 Its owned model launch explicitly enables `FOOTYLEVELS_MOTION_BRIDGE=1`.
-Actual motion deployment verification remains in progress. Mobile integration is
-FP-19/FP-40 work.
+Actual motion generation, private storage, recovery and cancellation passed the
+Development probe with model runtime `4017f11` and the modular adapter. Final API
+checkpoint `e43109d` adds metadata conflict retries and isolated integration tests.
+Current evidence is in `infra/dgx/reconstruction-api-evidence.json`; the counts and
+revisions below describe the earlier FP-53 checkpoint. Mobile/public-origin
+integration and physical-device verification remain FP-19/FP-40 work.
 
 The launcher passes explicit absolute socket/FFmpeg paths via `--adapter-arg`.
 This matters inside the isolated DNS user namespace: the account appears as uid 0

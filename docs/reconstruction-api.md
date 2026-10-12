@@ -1,8 +1,9 @@
 # Reconstruction requests (FP-39)
 
 The authenticated application API accepts keyframe and bounded motion requests
-through the existing durable reconstruction worker. Motion deployment verification
-is in progress; local fake-inference checks are separate from actual GPU evidence.
+through the existing durable reconstruction worker. Actual Development DGX motion
+generation, private publication and cancellation have passed the opt-in probe;
+local fake-inference checks remain separate evidence.
 The legacy model API on port 8010 is a separate compatibility service; the new
 authenticated API currently runs on loopback port 8011.
 
@@ -115,10 +116,30 @@ verified identities to check concurrent duplicate requests, competing work, owne
 lease redaction, cancellation, paused intake and deletion fences; its exact random
 fixtures are removed. This does not verify real Firebase sign-in or iOS playback.
 Actual GPU/private-storage generation and recovery are separately verified in
-`reconstruction-jobs.md`. FP-39 remains open for motion artifacts and integration;
+`reconstruction-jobs.md` and `../infra/dgx/reconstruction-api-evidence.json`.
 FP-19/40 still supply the durable mobile flow and device verification. Motion IPC
 tests use fake inference with real decoding/packing, check cancellation and serial
 execution, and verify stage-group cleanup after timeout, termination and parent loss.
 The opt-in `scripts/verify_motion_dgx.py` is the separate actual-GPU/private-storage
 probe, using a permitted source and synthetic verified HTTP identity; it never
 creates a real Firebase account or claims physical-device end-to-end coverage.
+
+The final API checkpoint `e43109d` runs on Development loopback 8011 with model
+runtime `4017f11` on 8010. Verification passed 284 local backend tests (20 explicit
+opt-in/platform skips), 18 isolated real Development Firestore tests and 119 DGX
+cloud-service tests. The model release passed 46 runtime/IPC tests; five CPU-adapter
+cases needing cloud dependencies were checked separately locally and by real probes.
+The actual motion probe generated 30/30 poses, six previews and ten private output
+files, then verified exact replay without additional inference, expired-claim
+recovery and cancellation after real SAM seed inference. Its source, seven prepared
+objects and ten result objects were removed, together with fixture metadata/quota,
+staging and private motion cache. Selection identity in crowded clips and measured
+scale/ground calibration remain unverified. These checks are server/component
+verification; real Firebase sign-in and the full iPhone flow remain open.
+
+After motion processing and the final API restart, the separate actual keyframe
+regression generated two independently decoded GLBs and a manifest. Expired-claim
+recovery used attempt 2; exact replay added no inference, and real in-flight
+cancellation published no result. Its one source, seven prepared objects, three
+result files, fixture metadata/quota, staging and cache were removed. This confirms
+that restoring the warm estimator after motion preserves keyframe generation.
