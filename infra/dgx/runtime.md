@@ -12,6 +12,8 @@ also performs FP-18 durable deletion and retention maintenance. The launcher
 source defaults now match these ports; the deployed releases use explicit ports.
 
 See [public route and recovery](public-api.md) for launch commands and boundaries.
+The owned [systemd services](services.md) now supervise API, model and ngrok;
+use those units for restarts instead of launching a duplicate detached process.
 The original sections below are historical observations, including previous ports
 and releases. They must not be used as the current deployment map. Real private
 simulator motion and pose proofs passed before this public migration; their

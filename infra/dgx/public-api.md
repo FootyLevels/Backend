@@ -12,6 +12,12 @@ private listener. One model process shares the serial body/motion executor.
 
 ## Recovery
 
+The current deployment is managed by the account's systemd services. Follow
+[owned startup and recovery](services.md) for status, restart and release changes.
+Do not launch a second detached copy while the services are enabled. The commands
+below describe the underlying processes and are only a manual fallback after
+stopping/disabling the corresponding services.
+
 These commands use the existing private configuration, interpreters, checkpoints
 and selected GPU. First inspect owned PID/command/cwd and active jobs/staging,
 drain work, then gracefully stop only the identified deployment. Do not launch
@@ -69,7 +75,9 @@ was not needed. Returning to that mapping also re-exposes the legacy shared API,
 so the Development app must not use it as its authenticated account origin.
 
 This is a Development deployment. Demo Firebase/storage stay configured but have
-no public application runtime. A server login session or laptop-independent
-restart after server reboot is not yet demonstrated. The phone can now reach the
+no public application runtime. User lingering and an enabled systemd target now
+configure startup without SSH login. Controlled service recovery is recorded in
+[service evidence](service-recovery-evidence.json); a real shared-host reboot has
+not been performed. The phone can now reach the
 API directly; physical-device acceptance and interactive Google login remain
 separate checks. No full application acceptance is inferred from smoke tests.

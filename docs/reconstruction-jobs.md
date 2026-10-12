@@ -104,8 +104,10 @@ cloud assets. Connections, JPEG dimensions/size and response packets are bounded
 Disconnect cancels queued inference. In-flight inference finishes only into private
 cache, while the cloud parent fences publication. It cannot overlap new work because
 the same serial executor owns both. An inference watchdog exits our owned model
-process after 180 seconds of hung execution; restart the owned runtime using
-`infra/dgx/runtime.md`. Recovery needs that restart; no uptime guarantee is implied.
+process after 180 seconds of hung execution. The owned Development systemd service
+now restarts that process under the same GPU preflight; see
+`infra/dgx/services.md`. Startup can wait for GPU capacity, and no uptime guarantee
+is implied. A controlled process-exit test is separate from inducing a CUDA hang.
 Cloud attempt/retry deadlines still provide a durable failure when the model stays
 unavailable. Unsupported profiles fail within the bounded retry policy.
 
