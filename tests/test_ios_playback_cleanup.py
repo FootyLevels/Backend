@@ -27,3 +27,18 @@ def test_real_ios_fixture_guard_accepts_only_exact_development_marker_and_owner(
     for case in cases:
         with pytest.raises(ValueError):
             module.validate_ios_cleanup_scope(*case)
+
+
+def test_cleanup_entry_requires_finished_development_invocation_without_extra_owners():
+    import copy
+    spec = importlib.util.spec_from_file_location('ios_cleanup', Path(__file__).parents[1]/'scripts/cleanup_ios_playback_fixtures.py')
+    helper = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(helper)
+    evidence = {'ticket': 'FP-40', 'environment': 'dev', 'runID': str(uuid.uuid4()),
+                'users': ['fixtureUid'], 'projects': ['fixtureProject'], 'jobs': ['fixtureJob'],
+                'phases': ['passed-account-deleted-awaiting-exact-cloud-cleanup']}
+    assert helper.validated_evidence(evidence)['users'] == ['fixtureUid']
+    for field, value in [('environment', 'demo'), ('ticket', 'FP-16'), ('users', ['a', 'b']),
+                         ('projects', ['a', 'b']), ('jobs', ['../other']), ('phases', ['running'])]:
+        changed = copy.deepcopy(evidence); changed[field] = value
+        with pytest.raises(ValueError): helper.validated_evidence(changed)
