@@ -14,7 +14,7 @@ authenticated API currently runs on loopback port 8011.
 3. Poll `/api/projects/{id}` until `state` is `ready`. Use `preparedMedia.video`
    for selection, with its canonical 30 fps frame indices and normalized boxes.
    Obtain temporary private playback/preview URLs from
-   `POST /api/projects/{id}/prepared-media-assets`.
+   `POST /api/projects/{id}/media-assets`.
 4. Submit `POST /api/projects/{id}/reconstructions/keyframes` with the current
    project `inputRevision`. Every request requires `Authorization: Bearer <Firebase ID token>`.
 
