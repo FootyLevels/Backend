@@ -178,6 +178,9 @@ def main():
         port = {"api": 8010, "model": 8013}.get(args.service)
         if port:
             with socket.socket() as probe:
+                # Match Uvicorn's bind semantics: a closed connection in
+                # TIME_WAIT is not a competing live listener after a crash.
+                probe.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
                 probe.bind(("127.0.0.1", port))
         command, env = launch_command(home, args.service)
         os.execve(command[0], command, env)
