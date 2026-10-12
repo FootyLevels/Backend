@@ -81,3 +81,27 @@ claim that real signed/TUS capabilities were left to expire for 72 hours.
 Default tests and iOS client tests cover auth/ownership and truthful progress.
 Actual DGX/private storage and deployed-worker evidence are recorded separately;
 no physical-device or complete interactive-app acceptance is inferred.
+
+## Deployed proof — 12 October 2026
+
+Development API/CPU source 0148340 passed 82 targeted checks on DGX and was deployed
+on the existing public upstream 8010. Model 4017f11 stayed warm on private 8013;
+no model restart, extra GPU process, Demo change, ngrok policy or billing linkage.
+
+The scoped real Supabase/DGX probe passed: one committed synthetic video and two
+opaque derived fixture objects were independently verified, then tombstoned. A
+first injected storage failure retained quota and pending progress. With only
+this signature-free fixture's eligibility timestamps aged, the ordinary deployed
+CPU worker automatically retried, removed all three registered objects, verified
+absence, released owner quota once and removed the dependent comparison, nested
+metadata, jobs and synthetic reconstruction record. Completed replay was
+idempotent. The trusted final fixture teardown removed only its retained
+tombstone/profile/intent and zero-byte owner ledger, verifying metadata absence.
+This is real storage/maintenance evidence, not new GPU output or Firebase SDK
+login. Actual 72-hour expiry and physical UI interaction were not exercised.
+
+Final local defaults: 287 passes, 26 cloud opt-in skips. Real isolated database
+checks: 24 passes; all six deletion cases passed again after final changes.
+All 38 iOS upload/auth/playback component checks passed. Evidence is in
+[deployed deletion evidence](../infra/dgx/deletion-evidence.json). Confirmation/
+Cancel on a device and complete interactive application acceptance remain separate.

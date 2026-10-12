@@ -38,7 +38,7 @@ bash ~/.local/share/footylevels/fp50-dns/with_network_dns.sh \
 ```
 
 For detached launches use owner-only logs and record the specific launcher PID.
-Current releases remain model `4017f11` and cloud `e43109d`; these explicit port
+Current releases remain model `4017f11` and cloud `0148340`; these explicit port
 arguments work with those immutable releases. No cloud keys go into the model
 environment. The private DNS wrapper preserves the real HOME and allows the API
 and workers to reach Firebase/Supabase without sudo.
@@ -50,6 +50,9 @@ use the previously approved command and its already-private configuration:
 ngrok http 8010 --url https://ranting-pesticide-thespian.ngrok-free.dev \
   --host-header=localhost
 ```
+
+Since FP-18, the existing CPU worker also finishes durable recording deletion and
+quota/metadata cleanup; see [retention policy](../../docs/deletion.md).
 
 ## Verification and limits
 

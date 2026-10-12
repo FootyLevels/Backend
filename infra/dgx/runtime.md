@@ -4,10 +4,11 @@
 
 The approved public endpoint now serves the **authenticated Development API** on
 loopback **8010**. The owned model runtime listens privately on loopback **8013**;
-its owner-only Unix inference bridge is unchanged. Cloud source `e43109d` supervises
+its owner-only Unix inference bridge is unchanged. Cloud source `0148340` supervises
 one CPU media worker and one durable reconstruction dispatcher; model source
 `4017f11` supplies selected poses and whole-motion output through that bridge.
-The body model is warm, and no second GPU model process was added. The launcher
+The body model is warm, and no second GPU model process was added. The CPU worker
+also performs FP-18 durable deletion and retention maintenance. The launcher
 source defaults now match these ports; the deployed releases use explicit ports.
 
 See [public route and recovery](public-api.md) for launch commands and boundaries.
