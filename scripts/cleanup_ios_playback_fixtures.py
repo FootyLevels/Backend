@@ -21,8 +21,9 @@ from google.cloud.firestore_v1.base_query import FieldFilter
 from infra.dgx.cloud_config import load
 from footylevels.assets import SupabaseAssets
 from footylevels.media_jobs import FirestoreMediaJobs
+from footylevels.reconstruction_jobs import FirestoreReconstructionJobs
 from backend.model_bridge import send, receive
-from verify_media_worker_dgx import cleanup
+from verify_media_worker_dgx import cleanup, validate_ios_cleanup_scope
 body=json.load(sys.stdin)
 config=load('dev')
 assert config['FIREBASE_PROJECT_ID']=='footylevels-dev-20261009'
@@ -30,6 +31,11 @@ uid=body['users'][0]; pids=body['projects']; base=Path.home()/'.local/share/foot
 db=firestore.Client.from_service_account_json(os.environ['GOOGLE_APPLICATION_CREDENTIALS'],project=config['FIREBASE_PROJECT_ID'])
 repo=FirestoreMediaJobs(db); store=SupabaseAssets(config['SUPABASE_URL'],config['SUPABASE_SECRET_KEY'])
 owned=lambda collection:list(db.collection(collection).where(filter=FieldFilter('ownerId','==',uid)).stream())
+assert not owned('comparisons'),'Fixture scope changed; do not remove referenced assets'
+if pids:
+    validate_ios_cleanup_scope(db.project,uid,pids[0],body['runID'],[(s.id,s.to_dict()) for s in owned('projects')])
+else:
+    assert not any(owned(c) for c in ['projects','uploads','jobs','reconstructions','assetReservations'])
 jobs=owned('jobs'); jids={s.id for s in jobs}
 assert set(body['jobs']) <= jids
 for snapshot in jobs:
@@ -46,7 +52,8 @@ deadline=time.monotonic()+250
 while not quiet() and time.monotonic()<deadline:time.sleep(.5)
 assert quiet(),'Writers remain; retain evidence and retry later'
 reservations=owned('assetReservations')
-result_count=sum('/reconstructions/' in s.to_dict()['asset']['objectKey'] for s in reservations)
+result_prefix=f'users/{uid}/projects/{pids[0]}/{FirestoreReconstructionJobs.OUTPUT_DIRECTORY}/' if pids else ''
+result_count=sum(bool(result_prefix) and s.to_dict()['asset']['objectKey'].startswith(result_prefix) for s in reservations)
 if pids:
     removed=cleanup(db,repo,store,uid,pids[0],ios_playback_run_id=body['runID'])
 else:

@@ -1,0 +1,29 @@
+{
+  "ticket": "FP-40", "verifiedDate": "2026-10-11", "environment": "dev",
+  "backendBranch": "codex/fp-40-ios-verification",
+  "cleanupToolCheckpoint": "508efe7",
+  "cloudRelease": "e43109d", "modelRelease": "4017f11",
+  "api": "Private authenticated DGX loopback 8011, simulator via SSH forward 8012",
+  "identity": "Real temporary Firebase SDK Development email account",
+  "gpu": "GPU-bf91a965-c736-7317-95ff-469e3d182eeb",
+  "preparedFrameCount": 60,
+  "generated": {"status": "succeeded", "attempt": 1, "frames": 30, "validFrames": 30,
+    "vertices": 18439, "faces": 36874, "artifacts": 10, "sourceTimeOffset": 0.5},
+  "liveIosTest": {"passed": 1, "failed": 0, "skipped": 0, "playerReady": true, "sourceClockVerified": true},
+  "cleanup": {
+    "accountsAbsentVerified": true, "sourceObjects": 1, "reservedOutputObjects": 17,
+    "totalObjects": 18, "metadataAndObjectsAbsentVerified": true,
+    "privateModelCacheEntriesRemoved": 1, "ownerQuotaReleased": true, "globalReservedBytes": 0,
+    "writersQuiescent": true,
+    "accountingNote": "First cleanup report labeled all 17 reserved outputs as prepared; its category-only typo was corrected to use the repository's singular reconstruction directory. Exact deletion/absence checks covered all 18 files. The independently verified iOS result manifest contained 10 artifacts."
+  },
+  "afterCleanup": {"cloudHealthy": true, "publicCompatibilityHealthy": true, "bodyModelWarm": true,
+    "activeModelRequests": 0, "mediaStagingDirectories": 0, "gpuStagingDirectories": 0, "cacheRequests": 0,
+    "modelMotionCallsBefore": 2, "modelMotionCallsAfter": 3},
+  "cleanupGuardTests": {"passed": 2},
+  "limits": {"physicalIPhoneVerified": false, "interactiveGoogleLoginVerified": false,
+    "publicAuthenticatedRouteVerified": false, "fullInteractiveAppEndToEndVerified": false,
+    "privateSelectedKeyframeUIIntegrated": false},
+  "runtimeChangedDuringProbe": false, "otherUsersGpuProcessesChanged": false,
+  "billingLinked": false, "commitsPushed": false
+}
