@@ -76,6 +76,11 @@ terraform -chdir=infra/spark test
 The tests use mocked providers, with no Google calls or provisioning. They verify
 free-mode configuration and default denial of client access. The deferred configuration
 has its own separate format/validation/mock tests; it is not deployed by these commands.
+Development also declares the `integration-projects` pagination index for isolated
+real metadata tests. Those tests use `integration-*` collections, preventing live
+media/GPU workers from claiming synthetic fixtures. It uses the existing free
+database; Demo has no integration index. Actual dispatcher/model/storage probes
+remain separate and clean their exact default-collection fixtures after quiescence.
 
 ## Provision one environment
 

@@ -62,3 +62,34 @@ def test_legacy_job_documents_remain_readable_during_body_profile_upgrade():
     body = job.model_copy(update={'kind':'reconstructKeyframes', 'profile_version':'body-keyframes-v1',
         'keyframes':(KeyframeInput(frame_index=15, bbox=(0,0,1,1)),)})
     assert body.document()['keyframes'][0]['frameIndex'] == 15
+
+
+def test_metadata_transaction_retries_read_abort_with_fresh_transaction(monkeypatch):
+    from unittest.mock import Mock
+    from google.api_core import exceptions
+    from footylevels.repositories import FirestoreRecords
+    client = Mock()
+    transactions = [object(), object()]
+    client.transaction.side_effect = transactions
+    monkeypatch.setattr('footylevels.repositories.time.sleep', lambda _: None)
+    operation = Mock(side_effect=[exceptions.Aborted('fixture read conflict'), 'winner'])
+    assert FirestoreRecords(client)._transact(operation) == 'winner'
+    assert [call.args[0] for call in operation.call_args_list] == transactions
+
+
+@pytest.mark.parametrize('error', ['aborted', 'wrapped', 'offline', 'invalid'])
+def test_metadata_transaction_fails_bounded_and_preserves_input_errors(monkeypatch, error):
+    from unittest.mock import Mock
+    from google.api_core import exceptions
+    from footylevels.repositories import FirestoreRecords, RecordUnavailable
+    failure = exceptions.Aborted('fixture conflict')
+    if error == 'wrapped':
+        failure = ValueError('SDK retries exhausted')
+        failure.__cause__ = exceptions.Aborted('fixture conflict')
+    elif error == 'offline': failure = exceptions.ServiceUnavailable('fixture offline')
+    elif error == 'invalid': failure = ValueError('invalid selection')
+    operation = Mock(side_effect=failure)
+    monkeypatch.setattr('footylevels.repositories.time.sleep', lambda _: None)
+    with pytest.raises(ValueError if error == 'invalid' else RecordUnavailable):
+        FirestoreRecords(Mock())._transact(operation)
+    assert operation.call_count == (4 if error in {'aborted', 'wrapped'} else 1)

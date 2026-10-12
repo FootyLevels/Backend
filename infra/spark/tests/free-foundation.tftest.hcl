@@ -9,6 +9,10 @@ variables {
 run "free_foundation" {
   command = apply
   assert {
+    condition     = length(google_firestore_index.integration_owned_projects) == 1 && google_firestore_index.integration_owned_projects[0].collection == "integration-projects"
+    error_message = "Live development workers must never consume synthetic metadata test fixtures."
+  }
+  assert {
     condition     = google_project_iam_custom_role.auth_state.permissions == toset(["firebaseauth.users.get"]) && google_project_iam_member.api_auth_state.project == var.project_id
     error_message = "Token revocation checks require user reads only, never Firebase Auth administration."
   }
@@ -39,6 +43,10 @@ run "demo_identity_is_separate" {
   variables {
     project_id  = "footylevels-test-demo"
     environment = "demo"
+  }
+  assert {
+    condition     = length(google_firestore_index.integration_owned_projects) == 0
+    error_message = "Integration test fixtures and their index belong only in Development."
   }
   assert {
     condition     = google_service_account.api.account_id == "footylevels-api-demo" && google_project_iam_member.api_records.project == "footylevels-test-demo" && google_service_account.api.project == "footylevels-test-demo"

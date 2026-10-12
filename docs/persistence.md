@@ -51,6 +51,20 @@ recovery repeats the same input. Ordinary media/legacy job documents omit this
 new field for compatibility with older strict workers during a rolling upgrade.
 Old services must be upgraded before consuming the new body profile.
 
+The `body-motion-30fps-v1` profile instead persists `motionSegment` with inclusive
+`startFrame` and exclusive `endFrame`, bounded to 30–300 canonical frames. Its
+source/segment hash is server derived and rechecked during enqueue. Jobs without
+a segment omit this field from Firestore documents for rolling compatibility.
+Metadata-only integration tests use `integration-*` collections in Development,
+with random fixture owners and the same record/transaction code. The matching
+`integration-projects` pagination index exists only in Development. Live media/GPU
+dispatchers scan the normal collections and cannot consume these synthetic jobs.
+
+Profile bootstrap and idempotent project/reconstruction creation retry read-time
+Firestore transaction aborts with fresh transactions and bounded backoff. Exhaustion
+and metadata SDK read failures return a private 503 response, preserving input/state
+validation errors and exposing no SDK diagnostics or worker publication capabilities.
+
 Publication atomically creates the immutable result, completes the job and updates
 the project pointer. It requires current source/revision, a nonexpired matching lease,
 active job/attempt and matching owner/project/source/mode/attempt artifact paths.

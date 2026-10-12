@@ -2,6 +2,9 @@
 
 No cloud model/media is generated. Credentials must be the scoped development API
 identity, never implicit personal ADC. Default test runs skip cloud writes.
+Each invocation uses isolated collection names so a live dispatcher cannot claim
+synthetic metadata jobs. The actual default-collection dispatcher is tested by the
+separate opted-in GPU/storage probes.
 """
 from concurrent.futures import ThreadPoolExecutor
 from datetime import timedelta
@@ -30,7 +33,18 @@ def cloud():
     from footylevels.repositories import FirestoreRecords
     credentials = service_account.Credentials.from_service_account_file(os.environ["GOOGLE_APPLICATION_CREDENTIALS"])
     assert credentials.service_account_email == f"footylevels-api-dev@{project}.iam.gserviceaccount.com"
-    client = firestore.Client(project=project, credentials=credentials)
+    real_client = firestore.Client(project=project, credentials=credentials)
+    class IsolatedClient:
+        def __init__(self):
+            self.prefix = 'integration-'
+
+        def collection(self, name):
+            return real_client.collection(self.prefix + name)
+
+        def __getattr__(self, name):
+            return getattr(real_client, name)
+
+    client = IsolatedClient()
     uid = "fp51-" + uuid.uuid4().hex
     other = uid + "-other"
     repo = FirestoreRecords(client)

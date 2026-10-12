@@ -8,6 +8,7 @@ import uuid
 from fastapi import Depends, FastAPI, Header, HTTPException, Query, Request, Response
 from fastapi.responses import JSONResponse
 from firebase_admin import credentials, delete_app, initialize_app
+from google.api_core.exceptions import GoogleAPICallError
 from google.cloud import firestore
 from pydantic import Field, model_validator
 
@@ -74,6 +75,7 @@ def create_app(records, verifier, lifespan=None, *, assets=None, uploads=None) -
         return JSONResponse({"detail": "Invalid request"}, status_code=422)
 
     @app.exception_handler(RecordUnavailable)
+    @app.exception_handler(GoogleAPICallError)
     async def metadata_unavailable(request, error):
         return JSONResponse({"detail": "Service temporarily unavailable"}, status_code=503)
 

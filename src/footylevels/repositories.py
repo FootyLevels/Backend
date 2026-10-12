@@ -8,6 +8,7 @@ from datetime import datetime, timedelta
 import hashlib
 import json
 import re
+import random
 import time
 from typing import Protocol
 
@@ -102,7 +103,7 @@ class FirestoreRecords:
             transaction.create(ref, record.document())
             return record
 
-        return create(self.client.transaction())
+        return self._transact(create)
 
     def get_user(self, uid: str) -> UserRecord:
         return self._record(self._ref("users", uid).get(), UserRecord)
@@ -133,16 +134,19 @@ class FirestoreRecords:
             transaction.create(ref, record.document())
             return record
 
+        return self._transact(create)
+
+    def _transact(self, operation):
         # Firestore retries commit conflicts itself, but not aborted reads.
         for attempt in range(4):
             try:
-                return create(self.client.transaction())
+                return operation(self.client.transaction())
             except (exceptions.Aborted, ValueError) as error:
                 if not isinstance(error, exceptions.Aborted) and not isinstance(error.__cause__, exceptions.Aborted):
                     raise
                 if attempt == 3:
                     raise RecordUnavailable() from None
-                time.sleep(0.1 * 2**attempt)
+                time.sleep(random.uniform(0.1, 0.3) * 2**attempt)
             except (exceptions.ServiceUnavailable, exceptions.DeadlineExceeded):
                 raise RecordUnavailable() from None
 
@@ -281,7 +285,7 @@ class FirestoreRecords:
             transaction.update(project_ref, {"activeJobId": job_id, "updatedAt": record.created_at})
             return record
 
-        return enqueue(self.client.transaction())
+        return self._transact(enqueue)
 
     def _reconstruction_control(self):
         return self._ref("runtimeControls", "reconstruction")

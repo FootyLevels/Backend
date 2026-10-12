@@ -322,3 +322,16 @@ def test_motion_request_checks_identity_and_ownership(reconstruction_request, to
     assert client.post(f'/api/projects/{pid}/reconstructions/motion', headers=headers(token) if token else {},
         json={'inputRevision': 1, 'segment': {'startFrame': 0, 'endFrame': 30}}).status_code == status
     records.enqueue_reconstruction.assert_not_called()
+
+
+@pytest.mark.parametrize('error', ['ServiceUnavailable', 'Aborted', 'ResourceExhausted', 'DeadlineExceeded', 'PermissionDenied', 'FailedPrecondition'])
+def test_metadata_sdk_read_failure_is_private_retryable_response(reconstruction_request, error):
+    from google.api_core import exceptions as cloud_errors
+    from unittest.mock import Mock
+    client, records, pid, body = reconstruction_request
+    records.get_project = Mock(side_effect=getattr(cloud_errors, error)('private SDK diagnostic'))
+    response = client.post(f'/api/projects/{pid}/reconstructions/keyframes', headers=headers('alice'), json=body)
+    assert response.status_code == 503
+    assert response.json() == {'detail': 'Service temporarily unavailable'}
+    assert response.headers['Cache-Control'] == 'no-store'
+    records.enqueue_reconstruction.assert_not_called()
