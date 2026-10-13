@@ -10,7 +10,16 @@ player's body, built on the Momentum Human Rig (MHR).
 > reconstruction, playback and user-controlled visual review, without judging
 > whether a skill was performed correctly.
 
-## Pipeline
+## Application architecture
+
+The current application architecture is documented in [diagrams/README.md](diagrams/README.md),
+with editable Mermaid diagrams and SVG/PNG previews covering deployment, Backend
+components, Firestore data, APIs, assets, processing, deletion and recovery.
+The Development API runs on DGX loopback 8010 behind ngrok; the private model runs
+on 8013. Firebase supplies identity/records and Supabase stores private files.
+The diagram index distinguishes implemented components from pending acceptance.
+
+## Original local pipeline
 
 ```
 video → SAM 3D Body (per frame) → BodySequence → store / visualize
@@ -18,17 +27,19 @@ video → SAM 3D Body (per frame) → BodySequence → store / visualize
       MHR mesh + 3D joints
 ```
 
-SAM 3D Body is a **single-image** model, so video is handled by running one
-forward pass per frame. There is no temporal smoothing and no tracking.
+SAM 3D Body is a **single-image** model, so this original local pipeline handles
+video with one forward pass per frame, without temporal smoothing or tracking.
+The integrated body-motion profile additionally reuses SAM tracking and bounded
+motion encoding, as shown in the [reconstruction workflow](diagrams/README.md#08--reconstruction-and-playback).
 
 ## Setup
 
 Cloud/DGX infrastructure setup for FP-50 is documented in [infra/README.md](infra/README.md).
-It configures the free Firebase/Firestore foundation and Supabase storage separately from this local reconstruction runtime;
-the current API does not yet consume those cloud settings.
-FP-51 adds [validated application records and transactional Firestore repositories](docs/persistence.md)
-alongside the existing local sequence storage. Authenticated API integration follows
-in FP-14; these records are not yet wired into the running API.
+The authenticated `api.cloud` entry point uses the free Firebase/Firestore foundation,
+Supabase storage and [transactional application records](docs/persistence.md).
+Current deployment instructions are in [infra/dgx/public-api.md](infra/dgx/public-api.md)
+and [infra/dgx/services.md](infra/dgx/services.md). The setup below describes the
+original local reconstruction environment.
 
 ### 1. Python environment
 
