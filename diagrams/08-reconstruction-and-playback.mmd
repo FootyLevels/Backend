@@ -1,0 +1,38 @@
+sequenceDiagram
+    accTitle: FootyLevels reconstruction and private playback
+    accDescr: A bounded request creates an idempotent durable job. A credential-free adapter invokes the existing serial GPU model and cloud-aware parent workers verify and publish private assets for validated RealityKit playback.
+    autonumber
+    participant App as iOS app
+    participant API as Authenticated API
+    participant DB as Firestore jobs and results
+    participant Worker as Reconstruction worker
+    participant Model as Private model via Unix IPC
+    participant Store as Supabase private files
+    App->>API: Submit keyframes or motion segment with inputRevision
+    API->>DB: Transactional owner, prepared source, bounds and semantic job identity
+    DB-->>API: Existing identical job or new queued job
+    API-->>App: 202 and durable job ID
+    Worker->>DB: Claim one eligible job with lease and attempt
+    Worker->>Store: Download and verify pinned prepared video
+    Worker->>Worker: Start credential-free adapter in bounded private workspace
+    alt Selected keyframes
+        Worker->>Model: Private IPC: exact JPEG frames, boxes and provenance
+        Model->>Model: Reuse warm body estimator in serial executor
+        Model-->>Worker: keyframes.json and successful GLBs
+    else Bounded motion segment
+        Worker->>Model: Private IPC: verified trimmed segment and provenance
+        Model->>Model: Release warm estimator and tracking and body stages execute serially
+        Model-->>Worker: sequence.json, faces.bin, gzip chunks, video and previews
+        Model->>Model: Rewarm body estimator
+    end
+    Worker->>DB: Heartbeat and check current lease, revision and cancellation
+    Worker->>Worker: Validate files, timestamps, topology, hashes and missing-frame accounting
+    Worker->>DB: Reserve immutable attempt outputs within free-plan quotas
+    Worker->>Store: Upload and independently verify artifacts
+    Worker->>DB: Fenced transaction: immutable result, job succeeded or partial, project pointer
+    Worker->>Worker: Remove private staging
+    App->>API: Poll owned job, then GET reconstruction metadata
+    App->>API: POST reconstruction assets
+    API-->>App: Five-minute allowlisted asset map
+    App->>Store: Read manifest and referenced files
+    App->>App: Verify bytes, hashes, topology and timestamps and render with RealityKit

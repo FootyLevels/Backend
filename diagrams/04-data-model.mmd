@@ -1,0 +1,105 @@
+erDiagram
+    accTitle: FootyLevels core Firestore document model
+    accDescr: Logical references connect owner profiles, projects, durable jobs, immutable reconstruction metadata, uploads, deletion intents and comparison records. File bytes remain in Supabase.
+    users ||--o{ projects : owns
+    users ||--o{ comparisons : owns
+    users ||--o{ deletions : requests
+    projects ||--o{ uploads : receives
+    projects ||--o{ jobs : schedules
+    projects ||--o{ reconstructions : retains
+    jobs ||--o| reconstructions : publishes
+    projects |o--o| deletions : project_scope
+    reconstructions ||--o{ comparisons : left_input
+    reconstructions |o--o{ comparisons : optional_right_input
+    references |o--o{ comparisons : optional_right_input
+
+    users {
+        string id PK "Firebase UID"
+        string displayName
+        string accountState
+    }
+    projects {
+        string id PK
+        string ownerId FK
+        string title
+        string source "capture or gallery"
+        string state
+        int inputRevision
+        map video "AssetRef to uploaded source"
+        map preparedMedia "Canonical video and preview refs"
+        string activeJobId FK
+        string latestReconstructionId FK
+        timestamp deletedAt
+    }
+    uploads {
+        string id PK
+        string ownerId FK
+        string projectId FK
+        int expectedRevision
+        map asset "AssetRef"
+        string status
+        int reservedBytes
+        timestamp expiresAt
+        timestamp cleanupAfter
+    }
+    jobs {
+        string id PK "Semantic request hash"
+        string ownerId FK
+        string projectId FK
+        string kind
+        string status
+        int inputRevision
+        string inputHash
+        string profileVersion
+        map sourceAsset
+        array keyframes "Optional frame and box selection"
+        map motionSegment "Optional start and end frames"
+        int attemptCount
+        timestamp leaseExpiresAt "Private worker field"
+        timestamp heartbeatAt
+        string reconstructionId FK
+    }
+    reconstructions {
+        string id PK
+        string ownerId FK
+        string projectId FK
+        string jobId FK
+        string mode "keyframes or motion"
+        string outcome "ready or partial"
+        map engine "Source and checkpoint fingerprints"
+        map contract "Topology, units, coordinates, encoding"
+        array artifacts "Bounded AssetRef list"
+        int requestedFrameCount
+        int reconstructedFrameCount
+        int missingFrameCount
+    }
+    references {
+        string id PK
+        string title
+        string version
+        string publicationState
+        string licenseReference
+        map videoAsset
+        map manifestAsset
+    }
+    comparisons {
+        string id PK
+        string ownerId FK
+        string leftReconstructionId FK
+        string rightType "reconstruction or reference"
+        string rightId FK
+        string rightReferenceVersion
+        string mode "overlay or sideBySide"
+        int offsetMs "Manual alignment"
+        string state
+    }
+    deletions {
+        string id PK
+        string ownerId FK
+        string scope "project or account"
+        string projectId FK "Optional for account scope"
+        string state "pending or completed"
+        timestamp notBefore
+        timestamp completedAt
+        string lastError "Sanitized retry or reconciliation code"
+    }

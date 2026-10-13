@@ -1,0 +1,20 @@
+stateDiagram-v2
+    accTitle: FootyLevels durable job lifecycle
+    accDescr: Transactional leases fence running work. Transient errors and expired claims retry within bounded attempts and deadlines; cancellation and deletion prevent late publication.
+    [*] --> queued: owner request or verified upload finalization
+    queued --> running: claim transaction and new lease
+    running --> running: heartbeat or expired-lease reclaim with fresh attempt
+    running --> succeeded: complete verified output and fenced publish
+    running --> partial: usable reconstruction with declared missing frames
+    running --> retrying: transient failure within attempt and deadline bounds
+    retrying --> running: eligible retry claims a fresh attempt
+    queued --> failed: deadline or exhausted claim policy
+    retrying --> failed: attempt or total deadline exhausted
+    running --> failed: permanent input failure or exhausted policy
+    queued --> cancelled: owned cancellation or project deletion
+    running --> cancelled: owned cancellation or project deletion
+    retrying --> cancelled: owned cancellation or project deletion
+    succeeded --> [*]
+    partial --> [*]
+    failed --> [*]
+    cancelled --> [*]

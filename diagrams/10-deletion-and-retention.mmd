@@ -1,0 +1,26 @@
+flowchart TB
+    accTitle: FootyLevels durable deletion and retention
+    accDescr: Confirmed deletion immediately hides owned data and fences publication. A bounded CPU maintenance loop waits for capability grace periods, verifies exact file absence and releases quota before retaining a minimal tombstone.
+    request["User confirms DELETE project"]
+    account["DELETE /api/me/data"] --> restricted["Mark profile unavailable; block bootstrap and new projects"]
+    restricted -->|"Owned projects in bounded batches"| fence
+    request --> fence["Tombstone and intent: hide, cancel and fence access; return 202"]
+    fence --> grace["Applicable capability grace periods"]
+    grace --> source["Source: normally 72 hours from reservation"]
+    grace --> outputs["Derived writes: 24 hours from reservation"]
+    grace --> reads["Issued reads: five minutes after tombstone"]
+    reads --> maintenance["CPU maintenance: bounded batches every 120 seconds"]
+    source --> maintenance
+    outputs --> maintenance
+    maintenance --> files["Validate provenance; delete exact object; verify absence"]
+    files -->|"Unavailable or still present: keep reservation"| maintenance
+    files -->|"Verified absent"| quota["Release owner and global quota once"]
+    quota --> remaining{"All recorded files absent?"}
+    remaining -->|"No"| maintenance
+    remaining -->|"Yes"| metadata["Remove jobs, results, owned comparisons and scoped nested metadata"]
+    metadata --> complete["Complete intent; retain tombstone to block replay"]
+    files -.->|"Inconsistent provenance or accounting"| reconcile["Pending: reconciliation_required"]
+    classDef fence fill:#fff4de,stroke:#a78336,color:#152b46;
+    classDef result fill:#e8f6f1,stroke:#377967,color:#152b46;
+    class fence,grace,reconcile fence;
+    class complete,quota result;
