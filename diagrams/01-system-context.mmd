@@ -1,0 +1,21 @@
+flowchart LR
+    accTitle: FootyLevels system context
+    accDescr: A player uses the iOS app, Firebase login, the DGX application API and private Supabase assets. Firestore supplies durable metadata and jobs.
+    player["Player"] --> app["iOS app: SwiftUI and RealityKit"]
+    app -->|"Sign in and refresh identity"| auth["Firebase Authentication"]
+    app -->|"HTTPS and Firebase ID token"| gateway["ngrok public HTTPS endpoint"]
+    gateway -->|"Forward to loopback 8010"| backend["FootyLevels API and owned workers on DGX"]
+    backend -->|"Verify identity and account state"| auth
+    backend -->|"Read and transact records and durable jobs"| firestore[("Firestore metadata")]
+    backend -->|"Generate and verify 3D assets"| model["Private model service on DGX"]
+    backend -->|"Verify files and issue temporary access"| storage[("Supabase private object storage")]
+    app -->|"Direct signed TUS upload and temporary reads"| storage
+    app -.->|"Clearly labelled Debug example"| example["Bundled local 3D example"]
+    classDef client fill:#eaf2ff,stroke:#3d679b,color:#152b46;
+    classDef data fill:#e8f6f1,stroke:#377967,color:#152b46;
+    classDef external fill:#f1edff,stroke:#756394,color:#152b46;
+    classDef local fill:#fff4de,stroke:#a78336,color:#152b46;
+    class player,app client;
+    class firestore,storage data;
+    class auth,gateway external;
+    class example local;

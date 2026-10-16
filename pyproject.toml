@@ -1,7 +1,34 @@
 [project]
-name = "footylevels-2"
-version = "0.1.0"
-description = "Add your description here"
+name = "footylevels"
+version = "0.2.0"
+description = "3D body extraction for soccer skill video, powered by SAM 3D Body"
 readme = "README.md"
-requires-python = ">=3.12"
-dependencies = []
+# SAM 3D Body's INSTALL.md targets Python 3.11.
+requires-python = ">=3.11"
+dependencies = [
+    "opencv-python>=4.8.0",
+    "numpy>=1.24.0",
+    "torch>=2.2.0",
+    "pytorch-lightning>=2.0.0",
+    "huggingface-hub>=0.23.0",
+    "fastapi>=0.100.0",
+    "uvicorn>=0.23.0",
+    "python-multipart>=0.0.6",
+    "pyyaml>=6.0",
+    "pydantic>=2.0.0",
+    "matplotlib>=3.7.0",
+    "usd-core>=25.0",
+]
+
+[project.optional-dependencies]
+dev = ["pytest>=7.4.0"]
+cloud = ["google-cloud-firestore==2.34.0", "firebase-admin==7.7.0"]
+
+[project.scripts]
+footylevels-demo = "scripts.demo:main"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.pytest.ini_options]
+pythonpath = ["src"]

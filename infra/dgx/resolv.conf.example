@@ -1,0 +1,6 @@
+# Sheridan resolvers observed in VAC's working application configuration.
+# Verified from the FootyLevels DGX on 9 October 2026. Recheck on other networks.
+nameserver 142.55.100.25
+nameserver 142.55.44.25
+nameserver 142.55.136.25
+options timeout:2 attempts:2

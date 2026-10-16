@@ -8,3 +8,46 @@ wheels/
 
 # Virtual environments
 .venv
+
+# Model checkpoints (SAM 3D Body is ~2.8 GB and gated - download, don't commit)
+models/
+
+# Vendored upstream source (cloned, not authored here)
+vendor/
+
+# Extracted body sequences and generated meshes
+data/sequences/
+data/output/
+runtime/skill_lab/data/
+runtime/skill_lab/.venv*/
+runtime/skill_lab/vendor/
+runtime/skill_lab/checkpoints/
+runtime/skill_lab/.media/
+runtime/skill_lab/*.log
+runtime/skill_lab/*.pid
+
+# macOS
+.DS_Store
+
+# Test cache
+.pytest_cache/
+
+# Local cloud configuration, credentials and infrastructure state
+.env
+.env.*
+!.env.example
+infra/.terraform/
+infra/*.tfstate*
+infra/*.tfplan
+infra/*.tfplan.json
+infra/*.tfvars
+infra/*.backend.hcl
+infra/crash.log
+infra/credentials/
+infra/**/.terraform/
+infra/**/*.tfstate*
+infra/**/*.tfplan*
+infra/**/*.tfvars
+infra/**/*.backend.hcl
+infra/**/crash*.log
+infra/**/credentials/

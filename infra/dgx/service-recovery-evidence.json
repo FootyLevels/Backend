@@ -1,0 +1,54 @@
+{
+  "verifiedAt": "2026-10-12T20:20:58Z",
+  "ticket": "FP-55",
+  "environment": "dev",
+  "serviceManager": "systemd-user",
+  "source": {
+    "supervisor": "fa5d162",
+    "cloud": "0148340",
+    "model": "4017f11",
+    "supervisorSha256": "ca5f17dabe8e4ba0ca49f8788872d1e76fc1b2b7d4ec74d9be621ad89c90e532"
+  },
+  "startup": {
+    "lingerEnabled": true,
+    "targetEnabled": true,
+    "sudoUsed": false,
+    "hostRebootPerformed": false,
+    "allSixUnitDefinitionsVerified": true,
+    "separateOwnedCgroupsVerified": true,
+    "oldDetachedProcessesExited": true,
+    "oneProcessPerService": true,
+    "unchangedApplicationReleases": true
+  },
+  "controlledRecovery": [
+    {"service": "api", "fault": "SIGKILL on owned API Python process", "restartCountDelta": 1, "seconds": 16.21, "oldCgroupMembersExited": true, "oneMediaAndOneReconstructionWorker": true},
+    {"service": "model", "fault": "SIGTERM on owned model Python process", "restartCountDelta": 1, "secondsUntilBodyWarm": 85.84, "oldCgroupMembersExited": true},
+    {"service": "tunnel", "fault": "SIGTERM on owned ngrok process", "restartCountDelta": 1, "secondsUntilAgentRunning": 30.32, "oldCgroupMembersExited": true, "subsequentPublicHealthPassed": true}
+  ],
+  "finalVerification": {
+    "publicApplicationHealth": 200,
+    "anonymousProjects": 401,
+    "anonymousDeletions": 401,
+    "legacyAssetRoute": 404,
+    "apiHealthy": true,
+    "bodyModelLoaded": true,
+    "servicesActive": ["api", "model", "tunnel"],
+    "activeJobs": 0,
+    "activeInference": 0,
+    "mediaStagingDirectories": 0,
+    "reconstructionStagingDirectories": 0,
+    "globalReservedBytes": 0,
+    "healthTimerObservedUpdating": true,
+    "healthSnapshotPermissions": "0600",
+    "rawServiceStdoutStderr": "discarded; journal receives systemd lifecycle metadata only"
+  },
+  "tests": {"backendPassed": 294, "explicitCloudSkips": 26, "serviceChecksRepassedAfterTcpFix": 7},
+  "limitations": [
+    "Boot is configured; no shared DGX reboot was performed.",
+    "Model test verifies recovery from process exit and warmup, not an induced CUDA hang or a fresh reconstruction.",
+    "No complete interactive iPhone/Google-sign-in acceptance is inferred.",
+    "The local health timer does not prove public connectivity, cloud access, queue progress, storage growth or real inference.",
+    "Demo runtime, release CI/rollback rehearsal, bounded export/restore with deletion replay and expanded operational monitoring remain pending.",
+    "No paid service, extra GPU allocation, other-user process change, new ngrok policy or external notification delivery."
+  ]
+}

@@ -1,0 +1,53 @@
+{
+  "verifiedAt": "2026-10-10",
+  "ticket": "FP-52",
+  "runtime": "shared-team-skill-lab-8010",
+  "upstreamRevisions": {
+    "sam3dBody": "b5c765a0d89d789985e186d396315e7590887b94",
+    "sam3": "660a5e9e1b8b4c02c0ad97229b88a09a6e4ff5b7",
+    "sam3dObjects": "f91db411c50efee93d8db7aeb323885650f6f722"
+  },
+  "observedFilesSha256": {
+    "pyproject.toml": "9123cd9da45c3b841c9a23b5498f08c8ef0ddac6ae53df627d44e1a817efd303",
+    "uv.lock": "00a8e81361d76099f077408a2bb43020d852ea190ac2b80f21f1b87394bf62a3",
+    "backend/providers/local.py": "37ce36e33ca315784d5aa692c919467eb5dacc7ef8dc0e8d4825dad4dc971a35",
+    "backend/motion.py": "b543c86e54ba5ab56bf88eecdbbef341b7f7fa2895e2b57a046c7fea917c5dd9",
+    "scripts/serve_gpu.sh": "8f9cfdc48eeb2c8958f57d99f51f4a0d9132735f5ad5ad50ec2c6f18d957f7cd"
+  },
+  "bodyCheckpoint": {
+    "path": "checkpoints/sam-3d-body-dinov3/model.ckpt",
+    "bytes": 2109129346,
+    "sha256": "b5a2f9d305dd02626b967aa2e86021fba07065df66ce7a7e00ffb9664f150abf",
+    "configSha256": "1012fc3f39cb5e90e3f8fbadf7bded31604bfafdce0321d17a7c1a2d3f08b88d",
+    "mhrBytes": 696110248,
+    "mhrSha256": "352e271a6c42729c68554ceaea0c955e866970160c31e35506d782dc0f7377bc"
+  },
+  "smokeTest": {
+    "projectId": "69d64c1c33614231",
+    "remoteCleanup": {"deleteStatus": 204, "readAfterDeleteStatus": 404},
+    "inputSha256": "e1ca608f2fd20753bb755bffccc193143ca651cc6c35dd3de7c72d1a01a16bb9",
+    "durationSeconds": 1,
+    "fps": 3,
+    "bboxNormalized": [0.055, 0.21, 0.64, 0.79],
+    "keyframeSeconds": 17.533091,
+    "meshBytes": 960052,
+    "meshSha256": "fb67ed57b331cafaeaeeddf28f5d2a80526035a68c77df88287565f9cc257fde",
+    "vertices": 18439,
+    "faces": 36874,
+    "keypoints": 70,
+    "motionSeconds": 86.744394,
+    "motionStatus": "partial",
+    "validBodyFrames": 3,
+    "ballReady": false,
+    "groundAligned": false,
+    "footballFailure": "CUDA error 2: out of memory in object reconstruction",
+    "savedManifestSha256": "d8f955c6a430ac49cc50189786e791c8ac1571172e515676b2302c10e472c1ca"
+  },
+  "limitations": [
+    "Actual process environment and assigned GPU were not readable",
+    "Machine-wide memory snapshots are not per-job peak measurements",
+    "Installed package and file records do not establish complete runtime reproducibility",
+    "The current team service has not been migrated to Firestore/Supabase or Firebase ownership checks",
+    "Body validation succeeded; optional football mesh generation did not"
+  ]
+}

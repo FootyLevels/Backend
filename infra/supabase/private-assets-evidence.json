@@ -1,0 +1,88 @@
+{
+  "ticket": "FP-17",
+  "verifiedAt": "2026-10-11T03:20:54.020238+00:00",
+  "localTests": {
+    "passed": 175,
+    "skippedOptInFirestoreTests": 4
+  },
+  "environments": [
+    {
+      "environment": "dev",
+      "tests": [
+        "real-firebase-two-account-ownership",
+        "concurrent-idempotent-upload-and-finalization",
+        "tus-interruption-resume-stale-offset",
+        "signed-upload-path-and-overwrite-denial",
+        "private-download-checksum-expiry-refresh",
+        "saved-real-glb-private-delivery-and-immutable-budget",
+        "checksum-failure-cancel-quarantine-cleanup",
+        "free-storage-quota-reservations",
+        "deleted-project-asset-denial"
+      ],
+      "cleanup": true
+    },
+    {
+      "environment": "demo",
+      "tests": [
+        "real-firebase-two-account-ownership",
+        "concurrent-idempotent-upload-and-finalization",
+        "tus-interruption-resume-stale-offset",
+        "signed-upload-path-and-overwrite-denial",
+        "private-download-checksum-expiry-refresh",
+        "saved-real-glb-private-delivery-and-immutable-budget",
+        "checksum-failure-cancel-quarantine-cleanup",
+        "free-storage-quota-reservations",
+        "deleted-project-asset-denial"
+      ],
+      "cleanup": true
+    }
+  ],
+  "savedModelAsset": {
+    "sourceRuntimeRevision": "c865730",
+    "format": "glb",
+    "bytes": 960048,
+    "deliveryUsesSeededMetadata": true
+  },
+  "runtime": {
+    "authenticatedDevPort": 8011,
+    "binding": "127.0.0.1",
+    "modelCompatibilityPort": 8010,
+    "release": "f80aab4",
+    "processOwner": "bajajkun",
+    "privateAuthenticatedPidAtVerification": 3874030
+  },
+  "limitations": [
+    "iOS upload UI integration remains FP-16",
+    "No authenticated fresh model-job generation is claimed; FP-39/53 integration remains",
+    "Finalized sources remain preparing until FP-54 media decoding/preparation",
+    "Automatic retention/expired-upload scheduling and committed-project deletion remain FP-18/54",
+    "Already issued signed reads can remain valid for up to 300 seconds",
+    "Outstanding upload capabilities retain conservative reservations until verified cleanup; provider multipart storage and manual writes are outside the application ledger"
+  ],
+  "deployedDevelopmentHTTP": {
+    "environment": "dev",
+    "tests": [
+      "real-firebase-two-account-ownership",
+      "concurrent-idempotent-upload-and-finalization",
+      "tus-interruption-resume-stale-offset",
+      "signed-upload-path-and-overwrite-denial",
+      "private-download-checksum-expiry-refresh",
+      "saved-real-glb-private-delivery-and-immutable-budget",
+      "checksum-failure-cancel-quarantine-cleanup",
+      "free-storage-quota-reservations",
+      "deleted-project-asset-denial"
+    ],
+    "cleanup": true,
+    "transport": "dgx-loopback-http"
+  },
+  "isolatedDGXApiTests": {
+    "passed": 40,
+    "modelPackagesRequired": false,
+    "dependencyDeprecationWarnings": 1
+  },
+  "publicModelHealthAfterStorageDeployment": {
+    "status": "ok",
+    "owner": "FootyLevels",
+    "bodyModelLoaded": true
+  }
+}

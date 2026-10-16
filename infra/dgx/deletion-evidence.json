@@ -1,0 +1,55 @@
+{
+  "ticket": "FP-18",
+  "environment": "dev",
+  "cloudRelease": "0148340",
+  "gpuUsed": false,
+  "signedCapabilitiesIssued": false,
+  "eligibilityTimestampsSyntheticallyAged": true,
+  "real72HourExpiryWaited": false,
+  "fullIosEndToEnd": false,
+  "identity": "Trusted synthetic fixture owner; no Firebase login account",
+  "passed": true,
+  "automaticWorkerResumed": true,
+  "tombstoneDenial": true,
+  "pendingQuarantineHonest": true,
+  "injectedFailurePreservedQuota": true,
+  "registeredObjectsRemoved": 3,
+  "sourceAndDerivedAbsent": true,
+  "comparisonAndNestedMetadataRemoved": true,
+  "ownerQuotaReleased": true,
+  "completedReplayIdempotent": true,
+  "exactFixtureCleanup": {
+    "sourceObjects": 0,
+    "preparedObjects": 0,
+    "absenceVerified": true
+  },
+  "modelRelease": "4017f11",
+  "defaultBackendTests": {
+    "passed": 287,
+    "optInSkipped": 26,
+    "failed": 0
+  },
+  "realIsolatedFirestoreTests": {
+    "passed": 24,
+    "failed": 0,
+    "finalDeletionSubsetPassed": 6
+  },
+  "dgxAPISchemaCleanupTests": {
+    "passed": 82,
+    "failed": 0
+  },
+  "iosComponentTests": {
+    "passed": 38,
+    "failed": 0,
+    "skipped": 0
+  },
+  "verifiedDate": "2026-10-12",
+  "backendImplementationCheckpoint": "0148340",
+  "operatorProofCheckpoint": "4ab9e13",
+  "frontendImplementationCheckpoint": "b65c9cf",
+  "physicalDeleteConfirmationVerified": false,
+  "firebaseLoginIdentityDeletionImplemented": false,
+  "automaticServiceRestartAfterRebootVerified": false,
+  "demoDeploymentChanged": false,
+  "commitsPushed": false
+}
