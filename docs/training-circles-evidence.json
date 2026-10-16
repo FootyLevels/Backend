@@ -1,0 +1,200 @@
+{
+  "ticket": "FP-69",
+  "date": "2026-10-16",
+  "branch": "codex/training-circles",
+  "backendImplementationCommit": "4b26aba",
+  "proofCommit": "f222fd9",
+  "backendTests": {
+    "passed": 339,
+    "skipped": 29
+  },
+  "realFirestoreTests": {
+    "passed": 3
+  },
+  "realServiceProof": {
+    "passed": true,
+    "tests": [
+      "real-firebase-invite-rotation-idempotent-join-and-outsider-denial",
+      "explicit-private-share-real-signed-video-bytes-and-own-api-isolation",
+      "timestamp-feedback-retry-link-pagination-and-idempotency",
+      "member-removal-rejoin-generation-and-unshare-revocation",
+      "source-project-tombstone-revokes-shared-access",
+      "circle-deletion-revokes-members"
+    ],
+    "storageObjectsRemoved": 3,
+    "fixtureCleanupVerified": true,
+    "seededPreparedMedia": true,
+    "newGPUInference": false,
+    "deploymentChanged": false
+  },
+  "temporaryAccountsAbsentVerified": 3,
+  "transport": "Isolated DGX TestClient; real Firebase tokens, Firestore and Supabase; no HTTP listener",
+  "limitations": [
+    "Prepared media fixture was seeded by the trusted verifier",
+    "iOS client/player and UI tests are separate evidence",
+    "No shared 3D reconstruction, scoring, public feed or runtime deployment",
+    "Physical iPhone and interactive Google sign-in are not verified"
+  ],
+  "integrationIndexes": [
+    {
+      "name": "projects/footylevels-dev-20261009/databases/(default)/collectionGroups/integration-circlePosts/indexes/CICAgJim14AK",
+      "state": "READY",
+      "fields": [
+        {
+          "path": "circleId",
+          "order": "ASCENDING"
+        },
+        {
+          "path": "createdAt",
+          "order": "DESCENDING"
+        },
+        {
+          "path": "__name__",
+          "order": "ASCENDING"
+        }
+      ]
+    },
+    {
+      "name": "projects/footylevels-dev-20261009/databases/(default)/collectionGroups/projects/indexes/CICAgOjXh4EK",
+      "state": "READY",
+      "fields": [
+        {
+          "path": "ownerId",
+          "order": "ASCENDING"
+        },
+        {
+          "path": "state",
+          "order": "ASCENDING"
+        },
+        {
+          "path": "createdAt",
+          "order": "DESCENDING"
+        },
+        {
+          "path": "__name__",
+          "order": "ASCENDING"
+        }
+      ]
+    },
+    {
+      "name": "projects/footylevels-dev-20261009/databases/(default)/collectionGroups/integration-projects/indexes/CICAgJiUpoMK",
+      "state": "READY",
+      "fields": [
+        {
+          "path": "ownerId",
+          "order": "ASCENDING"
+        },
+        {
+          "path": "state",
+          "order": "ASCENDING"
+        },
+        {
+          "path": "createdAt",
+          "order": "DESCENDING"
+        },
+        {
+          "path": "__name__",
+          "order": "ASCENDING"
+        }
+      ]
+    },
+    {
+      "name": "projects/footylevels-dev-20261009/databases/(default)/collectionGroups/integration-circleComments/indexes/CICAgJiUsZIK",
+      "state": "READY",
+      "fields": [
+        {
+          "path": "postId",
+          "order": "ASCENDING"
+        },
+        {
+          "path": "createdAt",
+          "order": "DESCENDING"
+        },
+        {
+          "path": "__name__",
+          "order": "ASCENDING"
+        }
+      ]
+    },
+    {
+      "name": "projects/footylevels-dev-20261009/databases/(default)/collectionGroups/integration-circlePosts/indexes/CICAgJim14AK",
+      "state": "READY",
+      "fields": [
+        {
+          "path": "circleId",
+          "order": "ASCENDING"
+        },
+        {
+          "path": "createdAt",
+          "order": "DESCENDING"
+        },
+        {
+          "path": "__name__",
+          "order": "ASCENDING"
+        }
+      ]
+    },
+    {
+      "name": "projects/footylevels-dev-20261009/databases/(default)/collectionGroups/projects/indexes/CICAgOjXh4EK",
+      "state": "READY",
+      "fields": [
+        {
+          "path": "ownerId",
+          "order": "ASCENDING"
+        },
+        {
+          "path": "state",
+          "order": "ASCENDING"
+        },
+        {
+          "path": "createdAt",
+          "order": "DESCENDING"
+        },
+        {
+          "path": "__name__",
+          "order": "ASCENDING"
+        }
+      ]
+    },
+    {
+      "name": "projects/footylevels-dev-20261009/databases/(default)/collectionGroups/integration-projects/indexes/CICAgJiUpoMK",
+      "state": "READY",
+      "fields": [
+        {
+          "path": "ownerId",
+          "order": "ASCENDING"
+        },
+        {
+          "path": "state",
+          "order": "ASCENDING"
+        },
+        {
+          "path": "createdAt",
+          "order": "DESCENDING"
+        },
+        {
+          "path": "__name__",
+          "order": "ASCENDING"
+        }
+      ]
+    },
+    {
+      "name": "projects/footylevels-dev-20261009/databases/(default)/collectionGroups/integration-circleComments/indexes/CICAgJiUsZIK",
+      "state": "READY",
+      "fields": [
+        {
+          "path": "postId",
+          "order": "ASCENDING"
+        },
+        {
+          "path": "createdAt",
+          "order": "DESCENDING"
+        },
+        {
+          "path": "__name__",
+          "order": "ASCENDING"
+        }
+      ]
+    }
+  ]
+}

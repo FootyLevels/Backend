@@ -27,7 +27,7 @@ HOST = "bajajkun@142.55.34.202"
 
 def ensure_indexes(credential):
     """Only two isolated Development test indexes; never apply infrastructure state."""
-    client = firestore_admin_v1.FirestoreAdminClient(credentials=credential)
+    client = firestore_admin_v1.FirestoreAdminClient(credentials=credential, transport="rest")
     Index = firestore_admin_v1.Index
     for collection, scope in [("integration-circlePosts", "circleId"),
                               ("integration-circleComments", "postId")]:

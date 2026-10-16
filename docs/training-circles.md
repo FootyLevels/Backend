@@ -134,3 +134,34 @@ GOOGLE_APPLICATION_CREDENTIALS=/path/to/scoped-development-api-key.json \
 These metadata tests do not prove a deployed frontend or actual storage bytes.
 The separate cross-stack proof uses a real small prepared MP4 and real private
 storage. iPhone acceptance remains an additional product check.
+
+
+## Verified local checkpoint — 16 October 2026
+
+The full Backend suite passed **339 checks**, with 29 explicit cloud/platform skips.
+The three opted-in real isolated Firestore circle tests passed separately. A
+separate committed TestClient proof on DGX passed with three real temporary
+Firebase accounts and actual private Supabase bytes: invitation/join, sharing,
+outsider and foreign-project denial, timestamped feedback, retry links,
+pagination/idempotency, removal/rejoin generations, unsharing and deletion.
+It seeded synthetic prepared media and ran no new GPU job or API listener.
+All three fixture objects, exact scoped metadata and three temporary login
+accounts were removed, with absence verified. See
+[aggregate evidence](training-circles-evidence.json).
+
+The proof helpers are `scripts/verify_circles_mac.py` and
+`scripts/verify_circles_dgx.py`. The Mac helper requires
+`FOOTYLEVELS_COMMUNITY_TEST_PROJECT=footylevels-dev-20261009`, a clean committed
+checkout, the existing trusted DGX SSH route and local operator ADC for disposable
+identity cleanup. It transfers only allowlisted tracked source, passes temporary
+tokens on SSH stdin, starts no listener and leaves deployed release links unchanged.
+The server's existing private runtime config supplies the scoped application
+identity and storage key; these never enter the source archive or output.
+
+Only the two integration-prefixed indexes were created for this proof. Their
+verified resource names are in the aggregate evidence. Before applying this
+Terraform branch, import them into
+`google_firestore_index.circle_feeds["integration_posts"]` and
+`google_firestore_index.circle_feeds["integration_comments"]` respectively.
+Default feature indexes and the updated API runtime are not deployed. Native iOS
+component/UI checks and physical-device acceptance are separate evidence.
