@@ -2,11 +2,12 @@
   "ticket": "FP-69",
   "date": "2026-10-16",
   "branch": "codex/training-circles",
-  "backendImplementationCommit": "4b26aba",
-  "proofCommit": "f222fd9",
+  "backendImplementationCommit": "131d74f",
+  "proofCommit": "131d74f",
   "backendTests": {
-    "passed": 339,
-    "skipped": 29
+    "passed": 386,
+    "skipped": 29,
+    "newMotionCases": 47
   },
   "realFirestoreTests": {
     "passed": 3
@@ -16,24 +17,27 @@
     "tests": [
       "real-firebase-invite-rotation-idempotent-join-and-outsider-denial",
       "explicit-private-share-real-signed-video-bytes-and-own-api-isolation",
+      "explicit-pinned-motion-share-real-artifact-bytes-and-owner-api-isolation",
+      "motion-provenance-mutation-revokes-and-new-results-do-not-upgrade-shares",
       "timestamp-feedback-retry-link-pagination-and-idempotency",
       "member-removal-rejoin-generation-and-unshare-revocation",
       "source-project-tombstone-revokes-shared-access",
       "circle-deletion-revokes-members"
     ],
-    "storageObjectsRemoved": 3,
+    "storageObjectsRemoved": 7,
     "fixtureCleanupVerified": true,
     "seededPreparedMedia": true,
+    "seededMotion": true,
     "newGPUInference": false,
     "deploymentChanged": false
   },
   "temporaryAccountsAbsentVerified": 3,
   "transport": "Isolated DGX TestClient; real Firebase tokens, Firestore and Supabase; no HTTP listener",
   "limitations": [
-    "Prepared media fixture was seeded by the trusted verifier",
+    "Prepared media and a 30-frame motion fixture were seeded by the trusted verifier; this is not a new GPU inference run",
     "iOS client/player and UI tests are separate evidence",
-    "No shared 3D reconstruction, scoring, public feed or runtime deployment",
-    "Physical iPhone and interactive Google sign-in are not verified"
+    "No shared motion comparison, scoring, public feed or runtime deployment",
+    "Physical iPhone and interactive Google sign-in are not verified for this increment"
   ],
   "integrationIndexes": [
     {
@@ -72,5 +76,6 @@
         }
       ]
     }
-  ]
+  ],
+  "priorVideoOnlyImplementationCommit": "4b26aba"
 }

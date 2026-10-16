@@ -167,7 +167,7 @@ The separate cross-stack proof uses a real small prepared MP4 and real private
 storage. iPhone acceptance remains an additional product check.
 
 
-## Verified local checkpoint — 16 October 2026
+## Initial video-only checkpoint — 16 October 2026
 
 The full Backend suite passed **339 checks**, with 29 explicit cloud/platform skips.
 The three opted-in real isolated Firestore circle tests passed separately. A
@@ -196,3 +196,21 @@ Terraform branch, import them into
 `google_firestore_index.circle_feeds["integration_comments"]` respectively.
 Default feature indexes and the updated API runtime are not deployed. Native iOS
 component/UI checks and physical-device acceptance are separate evidence.
+
+## Verified motion-sharing increment — 16 October 2026
+
+Backend commit `131d74f` adds optional explicit motion sharing. The full suite
+passed **386 tests**, with 29 explicit skips, including 47 new motion cases. Three
+real isolated Firestore circle tests passed separately. The expanded real
+Firebase/Firestore/Supabase proof passed all eight service scenarios, including
+the selected motion manifest/topology/compressed chunk/trimmed video bytes,
+owner-API isolation, canonical-video feedback times, immutable result selection,
+job mutation revocation, member removal, unsharing and source deletion.
+
+The trusted verifier seeded a synthetic 30-frame motion segment starting at
+source frame 15. This proves actual sharing authorization and artifact delivery,
+without new GPU inference. All seven fixture objects, exact scoped metadata
+(including seeded job/result records) and three temporary accounts were removed
+and verified absent. The aggregate evidence above now records this latest
+checkpoint. No runtime release or default index was changed, and motion sharing
+requires no additional indexes beyond the existing circle feeds.
