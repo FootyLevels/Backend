@@ -2,9 +2,10 @@
 
 The first community feature is a private circle of friends, teammates or a coach.
 Players deliberately share an existing, prepared recording, receive feedback at a
-video moment, and can link their next attempt. Creating or uploading a recording
-never shares it automatically. No public feed, direct messages, 3D sharing or
-scoring is added.
+video moment, and can link their next attempt. A player may also deliberately
+attach one already-generated 3D body-motion result. Creating, uploading or
+generating a recording never shares it automatically. No public feed, direct
+messages, cross-player 3D comparison or scoring is added.
 
 ## API contract
 
@@ -23,10 +24,11 @@ response is `Cache-Control: no-store` and `Vary: Authorization`.
 | DELETE | `/api/circles/{id}/members/{uid}` | Non-owner self-leave or owner removal → `{state: "removed"}` |
 | DELETE | `/api/circles/{id}` | Owner deletes circle → `{state: "deleted"}` |
 | GET | `/api/circles/{id}/posts?limit=20&cursor=…` | `{items: [Post], nextCursor}` |
-| POST | `/api/circles/{id}/posts` | `{projectId, skill, note?, previousPostId?}` → `Post` (201) |
+| POST | `/api/circles/{id}/posts` | `{projectId, skill, note?, previousPostId?, reconstructionId?}` → `Post` (201) |
 | GET | `/api/circles/{id}/posts/{postId}` | `Post` |
 | DELETE | `/api/circles/{id}/posts/{postId}` | Author or circle owner removes share |
 | POST | `/api/circles/{id}/posts/{postId}/assets` | `PrivateReadGrant`, canonical video only |
+| POST | `/api/circles/{id}/posts/{postId}/motion-assets` | `PrivateReadGrant`, explicitly attached body-motion files only |
 | GET | `/api/circles/{id}/posts/{postId}/comments?limit=30&cursor=…` | `{items: [Comment], nextCursor}` |
 | POST | `/api/circles/{id}/posts/{postId}/comments` | `{text, timestamp?}` → `Comment` (201) |
 | DELETE | `/api/circles/{id}/posts/{postId}/comments/{commentId}` | Author or circle owner removes comment |
@@ -47,7 +49,25 @@ roster while durable cleanup catches up.
 `projectTitle`, `skill`, `note`, `createdAt`, `previousPostId` (nullable), and
 `video: {duration, width, height, fps, frameCount, asset: AssetRef}`. The asset is
 metadata; it contains no URL. A previous attempt must be visible in the same
-circle and belong to the same author.
+circle and belong to the same author. `motion` is nullable. When explicitly
+selected, it contains `{reconstruction, job}`: the immutable `ReconstructionRecord`
+JSON and only the mobile `CloudJob` playback fields (`id`, `ownerId`, `projectId`,
+`inputRevision`, `kind`, `status`, `stage`, `attemptCount`, `inputHash`,
+`profileVersion`, `sourceAsset`, `motionSegment`, `keyframes`, `reconstructionId`,
+`errorCode`). Worker IDs, leases, scheduling details and an internal full-job
+fingerprint are never returned or copied into the public job snapshot.
+
+Only a completed `body-motion-30fps-v1` result may be selected: successful/ready
+or partial/partial, a 30–300 frame segment inside the current prepared video,
+the exact current owner/project/revision/source, and matching job ID, attempt,
+source/segment hash and supported playback contract. Selected keyframe-pose
+results and unfinished jobs cannot be shared. The complete result and the full
+job fingerprint are pinned when sharing. Every read rechecks both actual
+records. Changing or deleting either hides the attached post and its feedback;
+there is no silent fallback to different motion. A newer generated result does
+not replace the selection. Existing video-only shares never gain motion unless
+the author creates a separate share with an explicit selection. Omitting
+`reconstructionId` or sending null preserves legacy video-only idempotency hashes.
 
 `Comment` contains `id`, `authorId`, `authorName`, `text`, `timestamp` (nullable)
 and `createdAt`. List order is newest first, with document ID as a stable tie
@@ -73,11 +93,21 @@ replaced source, non-ready/deleted project, removed post, or deleted circle make
 the post and feedback inaccessible. Rejoining never revives posts or comments
 from an earlier membership. This preserves deliberate consent after a leave.
 
-Playback grants sign only the pinned prepared `video.mp4` inside that author's
-exact project/media/job/attempt prefix. Original recordings, previews and 3D
-outputs are not shared. No new bucket, storage copy, public object or stored
-signed URL is created. The server mints at most 60 seconds of bearer access, then
-rechecks account, membership, circle, post and source state before returning it.
+The video grant signs only the pinned prepared `video.mp4` inside that author's
+exact project/media/job/attempt prefix. The optional motion grant signs only the
+selected result's exact reconstruction/job/attempt prefix: `sequence.json`,
+`faces.bin`, contiguous `body-000000.bin.gz` one-second chunks (six-digit start
+frame indices), optional in-segment `preview-####.jpg`, and trimmed `video.mp4`.
+The entire set, uniqueness and content types are checked before any signing;
+arbitrary files, nested paths, mixed attempts and incomplete chunk coverage are
+rejected. Grant keys are the exact relative filenames. Gzip chunks use
+`application/gzip`, topology uses `application/octet-stream`, and manifest,
+previews and video use `application/json`, `image/jpeg` and `video/mp4`.
+Original recordings and unrelated 3D outputs remain private. Existing owner-only
+reconstruction endpoints remain owner-only. No new bucket, storage copy, public
+object or stored signed URL is created. The server mints at most 60 seconds of
+bearer access, then rechecks all consent/source fences and the selected motion
+records after signing before returning it.
 Already-issued bearer reads cannot be revoked immediately; they can remain usable
 for at most 60 seconds. A recipient can retain bytes they already received.
 
@@ -87,7 +117,8 @@ community metadata in bounded batches before completing cleanup. Circle deletion
 erases its roster/text and creates a durable `circleCleanup` marker; worker
 reconciliation removes its posts/comments without touching anyone's original
 projects. Removing a share/comment erases its text and playback metadata while
-retaining a minimal idempotency tombstone. Membership removal immediately hides
+retaining a minimal idempotency tombstone. Removing a motion share erases both
+the nested result/job snapshot and its internal fingerprint. Membership removal immediately hides
 that member's posts/comments; their old metadata is retained until circle,
 project or account cleanup. Existing private-owner project routes remain private.
 

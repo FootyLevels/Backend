@@ -7,7 +7,7 @@ from fastapi import APIRouter, Depends, Header, HTTPException, Query
 from footylevels.circles import (AddComment, CreateCircle, JoinCircle, Key,
                                 ShareAttempt, public_comment, public_post)
 from footylevels.records import Id, utc_now
-from footylevels.repositories import RecordConflict
+from footylevels.repositories import RecordConflict, RecordNotFound
 
 
 def circle_router(circles, assets, active_identity):
@@ -53,7 +53,7 @@ def circle_router(circles, assets, active_identity):
     def share(circle_id: Id, body: ShareAttempt, idempotency_key: Annotated[Key, Header()],
               user=Depends(active_identity)):
         return public_post(circles.create_post(user.uid, circle_id, body.project_id, body.skill,
-            body.note, idempotency_key, body.previous_post_id))
+            body.note, idempotency_key, body.previous_post_id, body.reconstruction_id))
 
     @router.get("/api/circles/{circle_id}/posts/{post_id}")
     def post(circle_id: Id, post_id: Id, user=Depends(active_identity)):
@@ -78,6 +78,24 @@ def circle_router(circles, assets, active_identity):
             raise RecordConflict()
         return {"expiresAt": expires_at, "assets": {"video": {"url": url,
             "sha256": asset.sha256, "byteSize": asset.byte_size, "contentType": asset.content_type}}}
+
+    @router.post("/api/circles/{circle_id}/posts/{post_id}/motion-assets")
+    def motion_grant(circle_id: Id, post_id: Id, user=Depends(active_identity)):
+        if assets is None:
+            raise HTTPException(503, "Private storage is temporarily unavailable; retry later")
+        post = circles.get_post(user.uid, circle_id, post_id)
+        if post.motion is None:
+            raise RecordNotFound()
+        mapping = circles.motion_artifacts(post.motion)
+        expires_at = utc_now() + timedelta(seconds=60)
+        signed = {name: {"url": assets.signed_read(asset, seconds=60), "sha256": asset.sha256,
+                         "byteSize": asset.byte_size, "contentType": asset.content_type}
+                  for name, asset in mapping.items()}
+        # No capability is returned unless the entire selected result, full job
+        # fingerprint and every existing consent fence still match after I/O.
+        if public_post(circles.get_post(user.uid, circle_id, post_id)) != public_post(post):
+            raise RecordConflict()
+        return {"expiresAt": expires_at, "assets": signed}
 
     @router.get("/api/circles/{circle_id}/posts/{post_id}/comments")
     def comments(circle_id: Id, post_id: Id, limit: int = Query(30, ge=1, le=50),

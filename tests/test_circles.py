@@ -17,7 +17,9 @@ import pytest
 from api.cloud import create_app
 from footylevels.authentication import AuthenticationRejected, Identity
 from footylevels.circles import FirestoreCircles
-from footylevels.records import AssetRef, MediaPreview, PreparedMedia, ProjectRecord, UserRecord, utc_now
+from footylevels.model_requests import MOTION_PROFILE, motion_input_hash
+from footylevels.records import (AssetRef, Engine, JobRecord, MediaPreview, MotionSegment,
+    PlaybackContract, PreparedMedia, ProjectRecord, ReconstructionRecord, UserRecord, utc_now)
 from footylevels.repositories import FirestoreRecords, RecordConflict, RecordNotFound
 
 
@@ -514,3 +516,207 @@ def test_grant_rechecks_project_and_owner_and_tolerates_new_feedback(setup):
     store.collection('projects').document(project.id).set(project.document())
     assets.during_sign = lambda: store.collection('users').document('alice').update({'accountState': 'restricted'})
     assert client.post(path, headers=headers('bob')).status_code == 404
+
+
+def completed_motion(store, project, identifier='motion-result', outcome='ready'):
+    source = project.prepared_media.video
+    segment = MotionSegment(start_frame=0, end_frame=30)
+    job = JobRecord(id=identifier, owner_id=project.owner_id, project_id=project.id,
+        kind='reconstructMotion', input_revision=project.input_revision,
+        input_hash=motion_input_hash(source, segment), profile_version=MOTION_PROFILE,
+        source_asset=source, motion_segment=segment, status='succeeded' if outcome == 'ready' else 'partial',
+        stage='ready' if outcome == 'ready' else 'partial', attempt_count=1, reconstruction_id=identifier,
+        finished_at=utc_now(), worker_id='private-worker', heartbeat_at=utc_now(), deadline_at=utc_now())
+    prefix = f'users/{project.owner_id}/projects/{project.id}/reconstruction/{identifier}/1/'
+    names = {'sequence.json': 'application/json', 'faces.bin': 'application/octet-stream',
+        'body-000000.bin.gz': 'application/gzip', 'video.mp4': 'video/mp4', 'preview-0000.jpg': 'image/jpeg'}
+    artifacts = tuple(AssetRef(bucket='private-media', object_key=prefix+name, sha256='c'*64,
+        byte_size=100, content_type=content_type) for name, content_type in names.items())
+    result = ReconstructionRecord(id=identifier, owner_id=project.owner_id, project_id=project.id,
+        job_id=identifier, input_revision=project.input_revision, profile_version=MOTION_PROFILE,
+        source_asset=source, mode='motion', outcome=outcome,
+        engine=Engine(model_name='test-body', upstream_commit='a'*40, checkpoint_hash='b'*64, config_hash='c'*64),
+        contract=PlaybackContract(topology_version='test-v1', encoding='motionBuffers'), artifacts=artifacts,
+        requested_frame_count=30, reconstructed_frame_count=30 if outcome == 'ready' else 29,
+        missing_frame_count=0 if outcome == 'ready' else 1)
+    store.collection('jobs').document(job.id).set(job.document())
+    store.collection('reconstructions').document(result.id).set(result.document())
+    return result, job
+
+
+@pytest.mark.parametrize('outcome', ['ready', 'partial'])
+def test_explicit_motion_share_grants_exact_selected_files_and_sanitized_provenance(setup, outcome):
+    client, circles, store, assets, cid, _, project = setup
+    result, job = completed_motion(store, project, outcome=outcome)
+    post = share(setup, reconstructionId=result.id)
+    motion = post['motion']
+    assert motion['reconstruction'] == result.model_dump(mode='json', by_alias=True)
+    assert motion['job']['id'] == job.id and motion['job']['motionSegment'] == {'startFrame': 0, 'endFrame': 30}
+    assert not {'workerId', 'leaseToken', 'leaseExpiresAt', 'heartbeatAt', 'deadlineAt', 'maxAttempts'} & motion['job'].keys()
+    assert 'motionJobFingerprint' not in post
+    stored = store.collection('circlePosts').document(post['id']).get().to_dict()
+    assert len(stored['motionJobFingerprint']) == 64 and 'private-worker' not in str(stored)
+    assert share(setup, reconstructionId=result.id)['id'] == post['id']
+    path = f'/api/circles/{cid}/posts/{post["id"]}/motion-assets'
+    grant = client.post(path, headers=headers('bob'))
+    assert grant.status_code == 200, grant.text
+    expected = {asset.object_key.rsplit('/', 1)[-1] for asset in result.artifacts}
+    assert set(grant.json()['assets']) == expected
+    assert assets.calls == [(asset, 60) for asset in result.artifacts]
+    from datetime import datetime
+    assert 0 < (datetime.fromisoformat(grant.json()['expiresAt']) - utc_now()).total_seconds() <= 60
+    assert 'private-short-lived-capability' not in str(store.data)
+    assert grant.headers['Cache-Control'] == 'no-store' and grant.headers['Vary'] == 'Authorization'
+    assert client.get(f'/api/reconstructions/{result.id}', headers=headers('bob')).status_code == 404
+    assert client.post(f'/api/reconstructions/{result.id}/assets', headers=headers('bob')).status_code == 404
+    before = len(assets.calls)
+    assert client.post(path, headers=headers('charlie')).status_code == 404
+    assert len(assets.calls) == before
+    circles.remove_post('alice', cid, post['id'])
+    tombstone = store.collection('circlePosts').document(post['id']).get().to_dict()
+    assert tombstone['motion'] is None and tombstone['motionJobFingerprint'] is None and tombstone['video'] is None
+    assert client.post(path, headers=headers('bob')).status_code == 404
+
+
+def test_video_only_posts_never_upgrade_and_keep_legacy_idempotency_hash(setup):
+    client, circles, store, assets, cid, _, project = setup
+    post = share(setup)
+    assert post['motion'] is None
+    result, _ = completed_motion(store, project)
+    store.collection('projects').document(project.id).update({'latestReconstructionId': result.id})
+    assert share(setup, reconstructionId=None)['id'] == post['id']
+    assert circles.get_post('bob', cid, post['id']).motion is None
+    assert client.post(f'/api/circles/{cid}/posts/{post["id"]}/motion-assets', headers=headers('bob')).status_code == 404
+    assert assets.calls == []
+    assert client.post(f'/api/circles/{cid}/posts', headers=headers(key='share-attempt-key-1234'),
+        json={'projectId': project.id, 'skill': 'Elastico', 'note': 'Help with the second touch',
+              'reconstructionId': result.id}).status_code == 409
+    # Reconstructing the pre-feature request digest proves old stored posts replay.
+    import json
+    legacy = {'projectId': project.id, 'skill': 'Elastico', 'note': 'Help with the second touch', 'previousPostId': None}
+    expected = hashlib.sha256(json.dumps(legacy, sort_keys=True, separators=(',', ':')).encode()).hexdigest()
+    assert store.collection('circlePosts').document(post['id']).get().to_dict()['creationHash'] == expected
+
+
+@pytest.mark.parametrize('collection,change', [
+    ('reconstructions', {'ownerId': 'bob'}), ('reconstructions', {'projectId': 'other-project'}),
+    ('reconstructions', {'inputRevision': 2}), ('reconstructions', {'profileVersion': 'unsupported-v2'}),
+    ('reconstructions', {'mode': 'keyframes'}), ('reconstructions', {'jobId': 'other-job'}),
+    ('reconstructions', {'requestedFrameCount': 60, 'reconstructedFrameCount': 60}),
+    ('jobs', {'ownerId': 'bob'}), ('jobs', {'projectId': 'other-project'}), ('jobs', {'inputRevision': 2}),
+    ('jobs', {'profileVersion': 'unsupported-v2'}), ('jobs', {'kind': 'reconstructKeyframes'}),
+    ('jobs', {'status': 'running'}), ('jobs', {'stage': 'running'}), ('jobs', {'reconstructionId': None}),
+    ('jobs', {'inputHash': 'd'*64}), ('jobs', {'finishedAt': None}), ('jobs', {'attemptCount': 2}),
+    ('jobs', {'motionSegment': {'startFrame': 31, 'endFrame': 61}}),
+    ('jobs', {'keyframes': [{'frameIndex': 0, 'bbox': [0., 0., 1., 1.]}]}),
+])
+def test_motion_sharing_rejects_unfinished_foreign_or_mismatched_provenance(setup, collection, change):
+    client, _, store, assets, cid, _, project = setup
+    result, _ = completed_motion(store, project)
+    store.collection(collection).document(result.id).update(change)
+    response = client.post(f'/api/circles/{cid}/posts', headers=headers(key='motion-invalid-key-1234'),
+        json={'projectId': project.id, 'skill': 'Elastico', 'reconstructionId': result.id})
+    assert response.status_code in {404, 409}, response.text
+    assert not list(store.collection('circlePosts').stream()) and assets.calls == []
+
+
+@pytest.mark.parametrize('bad_name,content_type', [('private-data.json', 'application/json'),
+    ('nested/sequence.json', 'application/json'), ('body-000001.bin.gz', 'application/gzip'),
+    ('body-000000.bin.gz', 'application/octet-stream'), ('preview-0030.jpg', 'image/jpeg'),
+    ('faces.bin', 'application/json'), ('video.mp4', 'video/quicktime')])
+def test_motion_rejects_unknown_nested_or_mistyped_artifact_names_before_any_signing(setup, bad_name, content_type):
+    client, _, store, assets, cid, _, project = setup
+    result, _ = completed_motion(store, project)
+    raw = result.document()
+    extra = {**raw['artifacts'][0], 'objectKey': result.artifacts[0].object_key.rsplit('/', 1)[0]+'/'+bad_name,
+             'contentType': content_type}
+    raw['artifacts'] = [*raw['artifacts'], extra]
+    store.collection('reconstructions').document(result.id).set(raw)
+    response = client.post(f'/api/circles/{cid}/posts', headers=headers(key='motion-path-invalid-123'),
+        json={'projectId': project.id, 'skill': 'Elastico', 'reconstructionId': result.id})
+    assert response.status_code == 409 and assets.calls == []
+
+
+@pytest.mark.parametrize('mutation', ['result_content', 'result_engine', 'job_hash', 'job_worker', 'result_missing',
+    'job_missing', 'member_removed', 'project_deleted', 'account_restricted', 'circle_deleted'])
+def test_motion_snapshot_and_all_existing_consent_fences_revoke_reads_and_grants(setup, mutation):
+    client, circles, store, assets, cid, _, project = setup
+    result, job = completed_motion(store, project)
+    post = share(setup, reconstructionId=result.id)
+    if mutation == 'result_content':
+        raw = result.document(); raw['artifacts'][0]['sha256'] = 'd'*64
+        store.collection('reconstructions').document(result.id).set(raw)
+    elif mutation == 'result_engine':
+        raw = result.document(); raw['engine']['configHash'] = 'd'*64
+        store.collection('reconstructions').document(result.id).set(raw)
+    elif mutation == 'job_hash':
+        store.collection('jobs').document(job.id).update({'inputHash': 'd'*64})
+    elif mutation == 'job_worker':
+        store.collection('jobs').document(job.id).update({'workerId': 'changed-worker'})
+    elif mutation == 'result_missing':
+        store.collection('reconstructions').document(result.id).delete()
+    elif mutation == 'job_missing':
+        store.collection('jobs').document(job.id).delete()
+    elif mutation == 'member_removed':
+        circles.remove_member('alice', cid, 'bob')
+    elif mutation == 'project_deleted':
+        store.collection('projects').document(project.id).update({'state': 'deleting'})
+    elif mutation == 'account_restricted':
+        store.collection('users').document('alice').update({'accountState': 'restricted'})
+    else:
+        circles.delete_circle('alice', cid)
+    path = f'/api/circles/{cid}/posts/{post["id"]}'
+    for method, suffix in [('get', ''), ('post', '/assets'), ('post', '/motion-assets'), ('get', '/comments')]:
+        assert client.request(method, path+suffix, headers=headers('bob')).status_code == 404
+    assert assets.calls == []
+
+
+def test_motion_grant_rechecks_selected_job_after_signing_and_does_not_switch_to_new_result(setup):
+    client, _, store, assets, cid, _, project = setup
+    result, job = completed_motion(store, project)
+    post = share(setup, reconstructionId=result.id)
+    newer, _ = completed_motion(store, project, identifier='newer-motion')
+    store.collection('projects').document(project.id).update({'latestReconstructionId': newer.id})
+    path = f'/api/circles/{cid}/posts/{post["id"]}'
+    assert client.get(path, headers=headers('bob')).json()['motion']['reconstruction']['id'] == result.id
+    assets.during_sign = lambda: store.collection('jobs').document(job.id).update({'workerId': 'changed-worker'})
+    response = client.post(path+'/motion-assets', headers=headers('bob'))
+    assert response.status_code == 404 and 'https://' not in response.text
+    assert len(assets.calls) == len(result.artifacts)
+
+
+@pytest.mark.parametrize('mismatch', ['result_source', 'job_source', 'foreign_path', 'mixed_attempt', 'missing_chunk'])
+def test_motion_requires_exact_prepared_source_and_complete_owned_output_attempt(setup, mismatch):
+    client, _, store, assets, cid, _, project = setup
+    result, job = completed_motion(store, project)
+    raw = result.document()
+    if mismatch in {'result_source', 'job_source'}:
+        collection = 'reconstructions' if mismatch == 'result_source' else 'jobs'
+        source = project.prepared_media.video.document(); source['sha256'] = 'f'*64
+        store.collection(collection).document(result.id).update({'sourceAsset': source})
+    else:
+        if mismatch == 'foreign_path':
+            raw['artifacts'][0]['objectKey'] = raw['artifacts'][0]['objectKey'].replace('users/alice/', 'users/bob/')
+        elif mismatch == 'mixed_attempt':
+            raw['artifacts'][0]['objectKey'] = raw['artifacts'][0]['objectKey'].replace('/1/', '/2/')
+        else:
+            raw['artifacts'] = [a for a in raw['artifacts'] if not a['objectKey'].endswith('.gz')]
+        store.collection('reconstructions').document(result.id).set(raw)
+    response = client.post(f'/api/circles/{cid}/posts', headers=headers(key='motion-source-requirement-123'),
+        json={'projectId': project.id, 'skill': 'Elastico', 'reconstructionId': result.id})
+    assert response.status_code == 409 and assets.calls == []
+
+
+def test_project_cleanup_erases_nested_motion_snapshots_without_deleting_private_result(setup):
+    _, circles, store, _, cid, _, project = setup
+    result, job = completed_motion(store, project)
+    post = share(setup, reconstructionId=result.id)
+    circles.create_comment('bob', cid, post['id'], 'Useful motion feedback', .5, 'motion-cleanup-comment-123')
+    store.collection('projects').document(project.id).update({'state': 'deleting'})
+    for _ in range(3):
+        if circles.cleanup_project('alice', project.id, 1):
+            break
+    assert not store.collection('circlePosts').document(post['id']).get().exists
+    assert not list(store.collection('circleComments').stream())
+    assert store.collection('reconstructions').document(result.id).get().exists
+    assert store.collection('jobs').document(job.id).get().exists

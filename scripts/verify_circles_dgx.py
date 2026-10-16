@@ -3,12 +3,14 @@
 Only synthetic prepared-video fixtures are seeded. This proves shared playback
 authorization/storage, not another upload/media/GPU run or an iOS UI workflow.
 """
+import gzip
 import hashlib
 import json
 import os
 from pathlib import Path
 import re
 import subprocess
+import struct
 import sys
 import tempfile
 import uuid
@@ -23,7 +25,9 @@ from api.cloud import create_app
 from footylevels.assets import SupabaseAssets
 from footylevels.authentication import FirebaseIdentityVerifier
 from footylevels.circles import FirestoreCircles
-from footylevels.records import AssetRef, MediaPreview, PreparedMedia
+from footylevels.model_requests import motion_input_hash
+from footylevels.records import (AssetRef, Engine, JobRecord, MediaPreview, MotionSegment,
+                                PlaybackContract, PreparedMedia, ReconstructionRecord, utc_now)
 from footylevels.repositories import FirestoreRecords
 from infra.dgx.cloud_config import load
 
@@ -53,7 +57,7 @@ def main():
     client = TestClient(create_app(records, FirebaseIdentityVerifier(runtime), circles=circles, assets=storage))
     headers = [{"Authorization": "Bearer " + token} for token in body["tokens"]]
     uid, member, outsider = body["owners"]
-    created_circles, projects, objects, tests = [], [], [], []
+    created_circles, projects, motions, objects, tests = [], [], [], [], []
     cleanup_verified = False
 
     def request(method, path, actor=0, expected=200, payload=None, key=None):
@@ -121,6 +125,87 @@ def main():
             response = requests.get(grant["assets"]["video"]["url"], timeout=30, allow_redirects=False)
             assert response.status_code == 200 and hashlib.sha256(response.content).hexdigest() == canonical.sha256
             tests.append("explicit-private-share-real-signed-video-bytes-and-own-api-isolation")
+            # A trusted, tiny motion fixture proves new sharing authorization
+            # and actual artifact bytes without invoking the production GPU.
+            motion_id = uuid.uuid4().hex * 2
+            motions.append(motion_id)
+            segment = MotionSegment(start_frame=15, end_frame=45)
+            input_hash = motion_input_hash(canonical, segment)
+            motion_job = JobRecord(id=motion_id, owner_id=uid, project_id=pid, kind="reconstructMotion",
+                input_revision=2, input_hash=input_hash, profile_version="body-motion-30fps-v1",
+                source_asset=canonical, motion_segment=segment, status="succeeded", stage="ready",
+                attempt_count=1, reconstruction_id=motion_id, finished_at=utc_now())
+            engine = Engine(model_name="synthetic-proof", upstream_commit="c" * 40,
+                            checkpoint_hash="d" * 64, config_hash="e" * 64)
+            topology = struct.pack("<3I", 0, 1, 2)
+            contract = PlaybackContract(topology_version="mhr-" + hashlib.sha256(topology).hexdigest()[:24] + "-v1",
+                                        encoding="motionBuffers")
+            motion_root = root / "motion"; motion_root.mkdir()
+            (motion_root / "faces.bin").write_bytes(topology)
+            # One static triangle repeated for 30 frames, quantized xyz uint16.
+            chunk = gzip.compress(struct.pack("<9H", 0, 0, 0, 65535, 0, 0, 0, 65535, 0) * 30, mtime=0)
+            (motion_root / "body-000000.bin.gz").write_bytes(chunk)
+            subprocess.run([ffmpeg, "-hide_banner", "-loglevel", "error", "-nostdin", "-i", str(video),
+                "-ss", "0.5", "-t", "1", "-c:v", "libx264", "-pix_fmt", "yuv420p", "-an",
+                str(motion_root / "video.mp4")], check=True, capture_output=True, timeout=30)
+            manifest = {"schemaVersion": 1, "version": 1, "profileVersion": "body-motion-30fps-v1",
+                "jobId": motion_id, "attempt": 1, "inputRevision": 2, "inputHash": input_hash,
+                "sourceSha256": canonical.sha256, "sourceStartFrame": 15, "sourceEndFrame": 45,
+                "sourceTimeOffset": 0.5, "playbackVideo": "video.mp4", "engine": engine.document(),
+                "contract": contract.document(), "vertexCount": 3, "faceCount": 1, "frameCount": 30,
+                "min": [0, 0, 0], "span": [1, 1, 1], "encoding": "uint16-le-xyz-gzip",
+                "topologyFile": "faces.bin", "fps": 30, "duration": 1,
+                "validBodyFrames": 30, "validBallFrames": 0, "ball": {"diameter": 0.22},
+                "chunks": [{"start": 0, "count": 30, "file": "body-000000.bin.gz", "bytes": len(chunk)}],
+                "frames": [{"index": i, "time": i / 30, "shot": 0, "valid": True,
+                            "sourceFrameIndex": 15 + i, "sourceTimestamp": (15 + i) / 30} for i in range(30)]}
+            (motion_root / "sequence.json").write_text(json.dumps(manifest))
+            motion_assets = tuple(put(motion_root / name, f"reconstruction/{motion_id}/1/{name}", content_type)
+                for name, content_type in [("sequence.json", "application/json"), ("faces.bin", "application/octet-stream"),
+                                           ("body-000000.bin.gz", "application/gzip"), ("video.mp4", "video/mp4")])
+            motion_result = ReconstructionRecord(id=motion_id, owner_id=uid, project_id=pid, job_id=motion_id,
+                input_revision=2, profile_version="body-motion-30fps-v1", source_asset=canonical,
+                mode="motion", outcome="ready", engine=engine, contract=contract, artifacts=motion_assets,
+                requested_frame_count=30, reconstructed_frame_count=30, missing_frame_count=0)
+            db.collection("jobs").document(motion_id).set(motion_job.document())
+            db.collection("reconstructions").document(motion_id).set(motion_result.document())
+            db.collection("projects").document(pid).update({"latestReconstructionId": motion_id})
+            assert request("GET", post_path, actor=1).get("motion") is None
+            request("POST", post_path + "/motion-assets", actor=1, expected=404)
+            motion_body = {**share_body, "reconstructionId": motion_id}
+            motion_post = request("POST", base + "/posts", expected=201, payload=motion_body,
+                                  key="fp69-motion-share-idempotency")
+            motion_path = base + "/posts/" + motion_post["id"]
+            assert motion_post["motion"]["reconstruction"]["id"] == motion_id
+            assert motion_post["motion"]["job"]["motionSegment"] == {"startFrame": 15, "endFrame": 45}
+            assert not {"leaseToken", "leaseExpiresAt", "workerId"}.intersection(motion_post["motion"]["job"])
+            assert request("POST", base + "/posts", expected=201, payload=motion_body,
+                           key="fp69-motion-share-idempotency")["id"] == motion_post["id"]
+            motion_feedback = request("POST", motion_path + "/comments", actor=1, expected=201,
+                payload={"text": "Feedback uses the original video clock", "timestamp": 1.75},
+                key="fp69-motion-canonical-feedback")
+            assert motion_feedback["timestamp"] == 1.75
+            motion_retry = request("POST", base + "/posts", expected=201,
+                payload={**motion_body, "previousPostId": motion_post["id"]}, key="fp69-motion-linked-retry")
+            assert motion_retry["previousPostId"] == motion_post["id"]
+            request("GET", "/api/reconstructions/" + motion_id, actor=1, expected=404)
+            request("GET", "/api/jobs/" + motion_id, actor=1, expected=404)
+            request("POST", motion_path + "/motion-assets", actor=2, expected=404)
+            motion_grant = request("POST", motion_path + "/motion-assets", actor=1)
+            assert set(motion_grant["assets"]) == {"sequence.json", "faces.bin", "body-000000.bin.gz", "video.mp4"}
+            for item in motion_grant["assets"].values():
+                fetched = requests.get(item["url"], timeout=30, allow_redirects=False)
+                assert fetched.status_code == 200 and len(fetched.content) == item["byteSize"]
+                assert hashlib.sha256(fetched.content).hexdigest() == item["sha256"]
+            tests.append("explicit-pinned-motion-share-real-artifact-bytes-and-owner-api-isolation")
+            # Newer generation metadata never silently changes a published share.
+            db.collection("projects").document(pid).update({"latestReconstructionId": "unshared-newer-result"})
+            assert request("GET", motion_path, actor=1)["motion"]["reconstruction"]["id"] == motion_id
+            db.collection("jobs").document(motion_id).update({"inputHash": "f" * 64})
+            request("POST", motion_path + "/motion-assets", actor=1, expected=404)
+            db.collection("jobs").document(motion_id).set(motion_job.document())
+            assert request("GET", motion_path, actor=1)["motion"]["reconstruction"]["id"] == motion_id
+            tests.append("motion-provenance-mutation-revokes-and-new-results-do-not-upgrade-shares")
             comment = request("POST", post_path + "/comments", actor=1, expected=201,
                 payload={"text": "Watch the second touch", "timestamp": 0.5}, key="fp69-comment-idempotent")
             assert request("POST", post_path + "/comments", actor=1, expected=201,
@@ -137,15 +222,19 @@ def main():
             tests.append("timestamp-feedback-retry-link-pagination-and-idempotency")
             request("DELETE", base + "/members/" + member)
             request("POST", post_path + "/assets", actor=1, expected=404)
+            request("POST", motion_path + "/motion-assets", actor=1, expected=404)
             request("POST", "/api/circles/join", actor=1, expected=404, payload={"code": second["code"]})
             fresh_invite = request("POST", base + "/invite")
             request("POST", "/api/circles/join", actor=1, payload={"code": fresh_invite["code"]})
             assert request("GET", post_path + "/comments")["items"] == []
             request("DELETE", post_path)
             request("POST", post_path + "/assets", actor=1, expected=404)
+            request("DELETE", motion_path)
+            request("POST", motion_path + "/motion-assets", actor=1, expected=404)
             tests.append("member-removal-rejoin-generation-and-unshare-revocation")
             db.collection("projects").document(pid).update({"state": "deleting"})
             request("GET", base + "/posts/" + retry["id"], actor=1, expected=404)
+            request("POST", base + "/posts/" + motion_retry["id"] + "/motion-assets", actor=1, expected=404)
             tests.append("source-project-tombstone-revokes-shared-access")
         request("DELETE", base)
         request("GET", base, actor=1, expected=404)
@@ -174,6 +263,11 @@ def main():
             db.collection("projects").document(pid).delete()
             if db.collection("projects").document(pid).get().exists:
                 failures.append("project")
+        for identifier in motions:
+            for collection in ["jobs", "reconstructions"]:
+                db.collection(collection).document(identifier).delete()
+                if db.collection(collection).document(identifier).get().exists:
+                    failures.append("motion-metadata")
         for owner in body["owners"]:
             for collection in ["circleMemberships", "users"]:
                 db.collection(collection).document(owner).delete()
@@ -182,10 +276,10 @@ def main():
         cleanup_verified = not failures
         raw.close(); client.close(); delete_app(runtime)
         print(json.dumps({"ticket": "FP-69", "environment": "dev", "tests": tests,
-            "passed": len(tests) == 6 and cleanup_verified,
+            "passed": len(tests) == 8 and cleanup_verified,
             "storageObjectsRemoved": removed_objects, "fixtureCleanupVerified": cleanup_verified,
-            "fixtureIds": {"owners": body["owners"], "circles": created_circles, "projects": projects},
-            "seededPreparedMedia": True, "newGPUInference": False, "deploymentChanged": False}), flush=True)
+            "fixtureIds": {"owners": body["owners"], "circles": created_circles, "projects": projects, "motions": motions},
+            "seededPreparedMedia": True, "seededMotion": True, "newGPUInference": False, "deploymentChanged": False}), flush=True)
         if failures:
             raise RuntimeError("Exact synthetic object cleanup requires attention")
 

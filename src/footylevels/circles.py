@@ -1,7 +1,8 @@
 """Private training circles: transactional membership, explicit sharing and revocation.
 
-Only verified canonical playback is shared. No storage copy or bearer capability is
-persisted here. Every read consults current membership, account and project fences.
+Only verified canonical playback and explicitly selected completed body motion are
+shared. No storage copy or bearer capability is persisted here. Every read consults
+current membership, account, project and selected-result provenance fences.
 """
 import base64
 import binascii
@@ -16,7 +17,9 @@ from google.cloud import firestore
 from google.cloud.firestore_v1.base_query import FieldFilter
 from pydantic import AwareDatetime, BeforeValidator, Field, model_validator
 
-from .records import AssetRef, Id, Metadata, ProjectRecord, UserRecord, utc_now
+from .model_requests import MOTION_PROFILE, motion_input_hash
+from .records import (AssetRef, Id, JobRecord, KeyframeInput, Metadata, MotionSegment,
+                      ProjectRecord, ReconstructionRecord, Sha256, UserRecord, utc_now)
 from .repositories import FirestoreRecords, RecordConflict, RecordNotFound
 
 
@@ -47,6 +50,15 @@ class ShareAttempt(Metadata):
     skill: Skill
     note: Note = ""
     previous_post_id: Id | None = None
+    reconstruction_id: Id | None = None
+
+    def document(self):
+        payload = super().document()
+        # Video-only requests must retain their original idempotency digest,
+        # whether this new optional field is omitted or explicitly null.
+        if self.reconstruction_id is None:
+            payload.pop("reconstructionId", None)
+        return payload
 
 
 class AddComment(Metadata):
@@ -91,6 +103,34 @@ class SharedVideo(Metadata):
     asset: AssetRef
 
 
+class SharedMotionJob(Metadata):
+    """Only the immutable playback provenance understood by the mobile client.
+
+    A full worker job contains publication leases, worker IDs and scheduling
+    internals. Those never belong in a circle post, even for the author.
+    """
+    id: Id
+    owner_id: Id
+    project_id: Id
+    input_revision: int
+    kind: Literal["reconstructMotion"]
+    status: Literal["succeeded", "partial"]
+    stage: Literal["ready", "partial"]
+    attempt_count: int = Field(ge=1, le=5)
+    input_hash: Sha256
+    profile_version: Literal["body-motion-30fps-v1"]
+    source_asset: AssetRef
+    motion_segment: MotionSegment
+    keyframes: tuple[KeyframeInput, ...] | None = None
+    reconstruction_id: Id
+    error_code: str | None = None
+
+
+class SharedMotion(Metadata):
+    reconstruction: ReconstructionRecord
+    job: SharedMotionJob
+
+
 class PostRecord(Metadata):
     id: Id
     circle_id: Id
@@ -103,6 +143,8 @@ class PostRecord(Metadata):
     created_at: AwareDatetime
     previous_post_id: Id | None = None
     video: SharedVideo | None
+    motion: SharedMotion | None = None
+    motion_job_fingerprint: Sha256 | None = None
     input_revision: int = Field(ge=1)
     author_membership: str
     state: Literal["active", "removed"] = "active"
@@ -126,7 +168,7 @@ class CommentRecord(Metadata):
 
 def public_post(post):
     return post.model_dump(mode="json", by_alias=True,
-        exclude={"input_revision", "author_membership", "state", "creation_hash", "comment_count"})
+        exclude={"input_revision", "author_membership", "state", "creation_hash", "comment_count", "motion_job_fingerprint"})
 
 
 def public_comment(comment):
@@ -314,6 +356,64 @@ class FirestoreCircles(FirestoreRecords):
                 or not re.fullmatch(r"[1-5]", suffix[1]) or suffix[2] != "video.mp4"):
             raise RecordConflict("Playback provenance is unavailable")
 
+    @staticmethod
+    def _job_fingerprint(job):
+        return hashlib.sha256(job.model_dump_json(by_alias=True).encode()).hexdigest()
+
+    @staticmethod
+    def motion_artifacts(motion):
+        """Validate the complete selected output before signing any one file."""
+        result, job = motion.reconstruction, motion.job
+        prefix = f"users/{result.owner_id}/projects/{result.project_id}/reconstruction/{job.id}/{job.attempt_count}/"
+        mapping = {}
+        types = {"sequence.json": "application/json", "faces.bin": "application/octet-stream",
+                 "video.mp4": "video/mp4"}
+        chunk_names = {f"body-{start:06d}.bin.gz" for start in range(0, result.requested_frame_count, 30)}
+        for asset in result.artifacts:
+            if asset.bucket != "private-media" or not asset.object_key.startswith(prefix):
+                raise RecordConflict("Motion artifact provenance is unavailable")
+            name = asset.object_key[len(prefix):]
+            content_type = types.get(name)
+            if name in chunk_names:
+                content_type = "application/gzip"
+            elif re.fullmatch(r"preview-[0-9]{4}\.jpg", name) and int(name[8:12]) < result.requested_frame_count:
+                content_type = "image/jpeg"
+            if not content_type or asset.content_type != content_type or name in mapping:
+                raise RecordConflict("Unsupported motion artifact")
+            mapping[name] = asset
+        if not (set(types) | chunk_names) <= mapping.keys():
+            raise RecordConflict("Motion artifact set is incomplete")
+        return mapping
+
+    def _selected_motion(self, transaction, project, reconstruction_id):
+        result = self._record(self._ref("reconstructions", reconstruction_id).get(transaction=transaction), ReconstructionRecord)
+        job = self._record(self._ref("jobs", result.job_id).get(transaction=transaction), JobRecord)
+        if result.owner_id != project.owner_id or result.project_id != project.id:
+            raise RecordNotFound()
+        segment = job.motion_segment
+        source = project.prepared_media.video
+        if (result.id != result.job_id or job.id != result.id
+                or (job.owner_id, job.project_id, job.input_revision, job.source_asset, job.profile_version)
+                    != (project.owner_id, project.id, project.input_revision, source, MOTION_PROFILE)
+                or (result.owner_id, result.project_id, result.input_revision, result.source_asset, result.profile_version)
+                    != (project.owner_id, project.id, project.input_revision, source, MOTION_PROFILE)
+                or result.mode != "motion" or result.contract.encoding != "motionBuffers"
+                or result.contract.coordinate_system != "rightHandedYUp" or result.contract.units != "meters"
+                or job.kind != "reconstructMotion" or job.keyframes is not None or segment is None
+                or segment.end_frame > project.prepared_media.frame_count
+                or job.input_hash != motion_input_hash(source, segment)
+                or job.reconstruction_id != result.id or job.finished_at is None or job.error_code is not None
+                or not 1 <= job.attempt_count <= 5
+                or job.status != ("succeeded" if result.outcome == "ready" else "partial")
+                or job.stage != ("ready" if result.outcome == "ready" else "partial")
+                or result.requested_frame_count != segment.end_frame - segment.start_frame):
+            raise RecordConflict("Only verified completed body motion can be shared")
+        fields = SharedMotionJob.model_fields
+        shared_job = SharedMotionJob.model_validate({name: getattr(job, name) for name in fields})
+        motion = SharedMotion(reconstruction=result, job=shared_job)
+        self.motion_artifacts(motion)
+        return motion, self._job_fingerprint(job)
+
     def _visible_post(self, transaction, uid, circle_id, post_id, context=None):
         circle, _, _ = context or self._context(transaction, uid, circle_id)
         post = self._record(self._ref("circlePosts", post_id).get(transaction=transaction), PostRecord)
@@ -333,6 +433,13 @@ class FirestoreCircles(FirestoreRecords):
                 media.duration, media.width, media.height, media.fps, media.frame_count):
             raise RecordNotFound()
         self._media_path(project, post.video.asset)
+        if post.motion is not None:
+            try:
+                motion, fingerprint = self._selected_motion(transaction, project, post.motion.reconstruction.id)
+                if motion != post.motion or fingerprint != post.motion_job_fingerprint:
+                    raise RecordNotFound()
+            except (RecordConflict, ValueError):
+                raise RecordNotFound() from None
         return post
 
     def get_post(self, uid, circle_id, post_id):
@@ -346,8 +453,9 @@ class FirestoreCircles(FirestoreRecords):
         identifier = hashlib.sha256(json.dumps([uid, circle_id, post_id, key, kind], separators=(",", ":")).encode()).hexdigest()
         return identifier, digest
 
-    def create_post(self, uid, circle_id, project_id, skill, note, key, previous_post_id=None):
-        body = ShareAttempt(project_id=project_id, skill=skill, note=note, previous_post_id=previous_post_id)
+    def create_post(self, uid, circle_id, project_id, skill, note, key, previous_post_id=None, reconstruction_id=None):
+        body = ShareAttempt(project_id=project_id, skill=skill, note=note, previous_post_id=previous_post_id,
+                            reconstruction_id=reconstruction_id)
         identifier, digest = self._creation(body, uid, circle_id, key, "post")
         ref = self._ref("circlePosts", identifier)
         def create(transaction):
@@ -368,6 +476,9 @@ class FirestoreCircles(FirestoreRecords):
                 raise RecordConflict("Wait for prepared playback")
             media = project.prepared_media
             self._media_path(project, media.video)
+            motion, fingerprint = (None, None)
+            if body.reconstruction_id is not None:
+                motion, fingerprint = self._selected_motion(transaction, project, body.reconstruction_id)
             if body.previous_post_id:
                 previous = self._visible_post(transaction, uid, circle_id, body.previous_post_id, context)
                 if previous.author_id != uid:
@@ -376,6 +487,7 @@ class FirestoreCircles(FirestoreRecords):
                 project_id=project.id, project_title=project.title, skill=body.skill, note=body.note,
                 previous_post_id=body.previous_post_id, created_at=utc_now(), input_revision=project.input_revision,
                 author_membership=membership.generation, creation_hash=digest,
+                motion=motion, motion_job_fingerprint=fingerprint,
                 video=SharedVideo(duration=media.duration, width=media.width, height=media.height,
                     fps=media.fps, frame_count=media.frame_count, asset=media.video))
             transaction.create(ref, post.document())
@@ -390,7 +502,7 @@ class FirestoreCircles(FirestoreRecords):
             if post.circle_id != circle_id or uid not in {post.author_id, circle.owner_id}:
                 raise RecordNotFound()
             transaction.update(self._ref("circlePosts", post_id), {"state": "removed", "note": "", "skill": "",
-                "projectTitle": "", "authorName": "", "video": None})
+                "projectTitle": "", "authorName": "", "video": None, "motion": None, "motionJobFingerprint": None})
         self._run(remove)
 
     def _comment(self, transaction, circle, snapshot, duration):
