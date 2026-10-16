@@ -36,7 +36,8 @@ def ensure_indexes(credential):
                   ("createdAt", Index.IndexField.Order.DESCENDING),
                   ("__name__", Index.IndexField.Order.ASCENDING)]
         match = next((index for index in client.list_indexes(parent=parent)
-                      if [(f.field_path, f.order) for f in index.fields] == fields), None)
+                      if index.name.startswith(parent + "/indexes/")
+                      and [(f.field_path, f.order) for f in index.fields] == fields), None)
         if match is None:
             operation = client.create_index(parent=parent, index=Index(
                 query_scope=Index.QueryScope.COLLECTION,
