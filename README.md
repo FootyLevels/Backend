@@ -37,6 +37,8 @@ motion encoding, as shown in the [reconstruction workflow](diagrams/README.md#08
 Cloud/DGX infrastructure setup for FP-50 is documented in [infra/README.md](infra/README.md).
 The authenticated `api.cloud` entry point uses the free Firebase/Firestore foundation,
 Supabase storage and [transactional application records](docs/persistence.md).
+The private [training circles prototype](docs/training-circles.md) adds deliberate
+video sharing, timestamped feedback, membership revocation and scoped cleanup.
 Current deployment instructions are in [infra/dgx/public-api.md](infra/dgx/public-api.md)
 and [infra/dgx/services.md](infra/dgx/services.md). The setup below describes the
 original local reconstruction environment.

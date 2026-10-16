@@ -48,3 +48,34 @@ resource "google_firestore_index" "integration_owned_projects" {
     order      = "ASCENDING"
   }
 }
+
+# Deliberately private circle feeds. These indexes do not deploy the API or
+# change deny-all client security rules. Isolated indexes are Development only.
+locals {
+  circle_feed_indexes = merge({
+    posts    = { collection = "circlePosts", field = "circleId" }
+    comments = { collection = "circleComments", field = "postId" }
+  }, var.environment == "dev" ? {
+    integration_posts    = { collection = "integration-circlePosts", field = "circleId" }
+    integration_comments = { collection = "integration-circleComments", field = "postId" }
+  } : {})
+}
+resource "google_firestore_index" "circle_feeds" {
+  for_each    = local.circle_feed_indexes
+  project     = var.project_id
+  database    = google_firestore_database.app.name
+  collection  = each.value.collection
+  query_scope = "COLLECTION"
+  fields {
+    field_path = each.value.field
+    order      = "ASCENDING"
+  }
+  fields {
+    field_path = "createdAt"
+    order      = "DESCENDING"
+  }
+  fields {
+    field_path = "__name__"
+    order      = "ASCENDING"
+  }
+}

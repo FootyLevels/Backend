@@ -153,6 +153,9 @@ class FirestoreDeletions(FirestoreMediaJobs):
         project = self._record(project_ref.get(), ProjectRecord)
         if project.owner_id != record.owner_id or project.state not in {'deleting', 'deleted'}:
             raise RecordConflict('Project tombstone is required')
+        from .circles import FirestoreCircles
+        if not FirestoreCircles(self.client).cleanup_project(record.owner_id, project.id, self.BATCH):
+            return record
         if project.state == 'deleted':
             return self._update(record, state='completed', completed_at=utc_now(), last_error=None)
         waiting = []
@@ -222,6 +225,9 @@ class FirestoreDeletions(FirestoreMediaJobs):
         # Account profile disables ordinary API access immediately. Project
         # creation rereads that profile transactionally, so this scan cannot miss
         # a recording created after the account tombstone.
+        from .circles import FirestoreCircles
+        if not FirestoreCircles(self.client).cleanup_account(record.owner_id, self.BATCH):
+            return record
         snapshots = list(self.client.collection('projects').where(
             filter=FieldFilter('ownerId', '==', record.owner_id)).where(
             filter=FieldFilter('state', 'in', ['uploading','preparing','ready','rejected','deleting'])).limit(self.BATCH).stream())
@@ -266,6 +272,8 @@ class FirestoreDeletions(FirestoreMediaJobs):
             return self._update(record, last_error='reconciliation_required')
 
     def reconcile_deletions(self, storage, cursors):
+        from .circles import FirestoreCircles
+        FirestoreCircles(self.client).reconcile_cleanup(self.BATCH)
         query = self.client.collection('deletions').where(filter=FieldFilter('state', '==', 'pending')).order_by('__name__')
         if cursors.get('deletions'):
             query = query.start_after({'__name__':self._ref('deletions',cursors['deletions'])})
