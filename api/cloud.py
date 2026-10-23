@@ -52,7 +52,7 @@ def public_job(record):
                              exclude={"lease_token", "worker_id", "lease_expires_at"})
 
 
-def create_app(records, verifier, lifespan=None, *, assets=None, uploads=None, deletions=None) -> FastAPI:
+def create_app(records, verifier, lifespan=None, *, assets=None, uploads=None, deletions=None, circles=None) -> FastAPI:
     app = FastAPI(title="FootyLevels", version="0.3.0", lifespan=lifespan)
 
     @app.middleware("http")
@@ -218,6 +218,10 @@ def create_app(records, verifier, lifespan=None, *, assets=None, uploads=None, d
         from footylevels.uploads import FirestoreUploads
         attach_assets(app, records, uploads or FirestoreUploads(records.client), assets, active_identity)
 
+    if circles is not None:
+        from api.circles import circle_router
+        app.include_router(circle_router(circles, assets, active_identity))
+
     return app
 
 
@@ -254,5 +258,6 @@ def app_factory() -> FastAPI:
             delete_app(firebase)
 
     from footylevels.deletions import FirestoreDeletions
+    from footylevels.circles import FirestoreCircles
     return create_app(FirestoreRecords(client), verifier, lifespan, assets=storage,
-                      deletions=FirestoreDeletions(client))
+                      deletions=FirestoreDeletions(client), circles=FirestoreCircles(client))
