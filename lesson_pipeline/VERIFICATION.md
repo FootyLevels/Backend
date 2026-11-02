@@ -46,3 +46,17 @@ After a key was supplied, the six independent context-experiment requests comple
 cleanup succeeded. See [EXPERIMENTS.md](EXPERIMENTS.md) and its execution evidence. This pilot
 uses qualitative explanations and video timestamps; it does not establish human teaching quality,
 Swift acceptance, or live production `generate` placeholder/repair behavior.
+
+## Minimal authoring default — 2 November 2026
+
+At checkpoint `26f3f40`, default generation was changed to video + shared instructions + schema.
+It no longer reads examples, cuts, analysis or evidence, and no GPU preparation is needed for
+authoring. Validation checks numeric timestamps, JSON shape and playback references rather than
+agreement with reconstructed motion. Legacy measured examples and optional 3D packaging remain
+compatible; the current exporters still require their separate matching MP4/motion assets.
+
+All 186 focused tests passed. One real Gemini 4 Argon run from a clean Chop and Spin workspace
+succeeded on the first response, with zero mechanical errors/warnings and successful provider
+file cleanup. The prompt was 11,107 characters. No analysis/evidence sidecars were present.
+See [minimal-baseline-evidence.json](minimal-baseline-evidence.json). This verifies the minimal
+authoring path, not the correctness of the coaching or a complete app integration/deployment.

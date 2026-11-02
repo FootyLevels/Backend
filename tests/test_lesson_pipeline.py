@@ -212,6 +212,7 @@ def test_the_app_bundle_holds_a_resolved_lesson_and_the_motion(work, tmp_path):
 
 
 def test_numeric_lesson_build_reuses_assets_without_legacy_measurement_validation(work, tmp_path):
+    pytest.importorskip('jsonschema', reason='Install the lessons extra for numeric lesson validation')
     numeric = json.loads((PACKAGE / 'examples' / 'hocus-pocus' / 'lesson.resolved.json').read_text())
     (work / 'lesson.json').write_text(json.dumps(numeric))
     bundle = build.build_app(work, work / 'lesson.json', tmp_path / 'numeric-app')
