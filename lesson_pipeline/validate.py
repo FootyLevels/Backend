@@ -4,7 +4,10 @@ Errors stop the build. Warnings point at things an author should look at again.
 """
 from __future__ import annotations
 
+import json
+import math
 import re
+from itertools import islice
 
 from .measures import PLACEHOLDER, Measures, PlaceholderError, resolve_lesson
 
@@ -20,6 +23,109 @@ SIDE_CLAIM = re.compile(r'\b(left|right) (foot|leg)\b', re.I)
 
 
 ZERO_READS_ODDLY = {'drop', 'turn', 'travel', 'ballSpeed', 'weightPct', 'touches'}
+
+
+def validate_structure(lesson: dict, duration: float) -> tuple[list[str], list[str]]:
+    """Check a numeric lesson's shape and playback references without judging its content.
+
+    This path uses only the source duration. Legacy measured lessons continue to use
+    ``validate`` below, including their optional measurement placeholders.
+    """
+    from jsonschema import Draft202012Validator
+    from .prompting import lesson_schema
+
+    if type(duration) not in (int, float) or not math.isfinite(duration) or duration <= 0:
+        return ['Video duration must be a finite positive number.'], []
+    try:
+        serialized = json.dumps(lesson, allow_nan=False)
+        if len(serialized.encode('utf-8')) > 2 * 1024 * 1024:
+            return ['Lesson exceeds the 2 MiB limit.'], []
+    except (TypeError, ValueError, RecursionError):
+        return ['Lesson must contain finite JSON values.'], []
+    validator = Draft202012Validator(lesson_schema())
+    errors = [f"schema {'.'.join(map(str, error.absolute_path))}: {error.message[:300]}"
+              for error in islice(validator.iter_errors(lesson), 20)]
+    if errors:
+        return errors, []
+
+    def text_values(value):
+        if isinstance(value, str):
+            yield value
+        elif isinstance(value, dict):
+            for item in value.values():
+                yield from text_values(item)
+        elif isinstance(value, list):
+            for item in value:
+                yield from text_values(item)
+
+    if any('{{' in text or '}}' in text for text in text_values(lesson)):
+        errors.append('Measurement placeholders are not supported in a video-only lesson.')
+
+    def unique_ids(items, where):
+        identifiers = [item['id'] for item in items]
+        if len(identifiers) != len(set(identifiers)):
+            errors.append(f'{where}: IDs must be unique.')
+        return set(identifiers)
+
+    def interval(start, end, lower, upper, where, slack=.01):
+        if not lower - .01 <= start < end <= upper + slack:
+            errors.append(f'{where}: range must be ordered and inside {lower:g}–{upper:g} seconds.')
+
+    def instant(t, lower, upper, where):
+        if not lower - .01 <= t <= upper + .01:
+            errors.append(f'{where}: timestamp must be inside {lower:g}–{upper:g} seconds.')
+
+    for field in ('id', 'folder'):
+        if field in lesson and not SLUG.fullmatch(lesson[field]):
+            errors.append(f'{field}: must be a lowercase slug.')
+    previous_end = 0
+    for shot in lesson['shots']:
+        interval(shot['start'], shot['end'], 0, duration, 'camera shot', slack=.05)
+        if shot['start'] < previous_end - .01:
+            errors.append('Camera shots must be ordered and non-overlapping.')
+        previous_end = shot['end']
+
+    unique_ids(lesson['skills'], 'skills')
+    for skill in lesson['skills']:
+        where = f"skill {skill['id']!r}"
+        if not SLUG.fullmatch(skill['id']):
+            errors.append(f'{where}: ID must be a lowercase slug.')
+        start, end = skill['range']
+        interval(start, end, 0, duration, where, slack=.05)
+        interval(*skill['watch'], start, end, f'{where}, watch')
+        for notice in skill.get('notice', []):
+            instant(notice['t'], start, end, f'{where}, notice')
+
+        phase_ids = unique_ids(skill['phases'], f'{where}, phases')
+        previous_end = start
+        for phase in skill['phases']:
+            label = f"{where}, phase {phase['id']!r}"
+            interval(phase['start'], phase['end'], start, end, label)
+            instant(phase['key'], phase['start'], phase['end'], f'{label}, key')
+            if phase['start'] < previous_end - .01:
+                errors.append(f'{label}: phases must be ordered and non-overlapping.')
+            previous_end = phase['end']
+
+        unique_ids(skill['drills'], f'{where}, drills')
+        for drill in skill['drills']:
+            interval(*drill['model'][:2], start, end, f"{where}, drill {drill['id']!r}")
+        for challenge in skill.get('challenges', []):
+            label = f'{where}, {challenge["type"]} challenge'
+            if challenge['type'] == 'choice':
+                instant(challenge['t'], start, end, label)
+                if challenge['answer'] >= len(challenge['options']):
+                    errors.append(f'{label}: answer must index an existing option.')
+                if 'play' in challenge:
+                    interval(*challenge['play'][:2], start, end, f'{label}, replay')
+            elif challenge['type'] == 'tap':
+                interval(challenge['from'], challenge['target'], start, end, label)
+            elif challenge['type'] == 'order':
+                order = challenge['ids']
+                if len(order) != len(set(order)) or not set(order) <= phase_ids:
+                    errors.append(f'{label}: IDs must be distinct references to this skill\'s phases.')
+                if sorted(challenge.get('shuffled', order)) != sorted(order):
+                    errors.append(f'{label}: shuffled must be a permutation of the phase IDs.')
+    return errors, []
 
 
 def _zero_readings(text: str, analysis: dict, ball_foot) -> list[str]:

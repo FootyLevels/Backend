@@ -9,9 +9,18 @@ import json
 import re
 from pathlib import Path
 
-from .prompting import PACKAGE, PromptError, _measurements
+from .prompting import PACKAGE, PromptError
 
 CONTEXTS = ('video', 'shots', 'reconstruction')
+
+
+def _measurements(work: Path) -> str:
+    """evidence.md without its pictures: the model watches the video instead."""
+    path = work / 'evidence' / 'evidence.md'
+    if not path.exists():
+        raise PromptError(f'no {path}; run `run` (or `evidence`) first')
+    lines = [l for l in path.read_text().splitlines() if '](' not in l and not l.startswith('# ')]
+    return '\n'.join('#' + l if l.startswith('## ') else l for l in lines).strip()   # shots nest under this section
 
 
 def shared_schema() -> dict:

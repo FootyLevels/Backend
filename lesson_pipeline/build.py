@@ -17,8 +17,8 @@ import shutil
 from pathlib import Path
 
 from .authoring import load_lesson
-from .measures import resolve_lesson
-from .validate import SLUG, validate
+from .measures import PLACEHOLDER, resolve_lesson
+from .validate import SLUG, validate, validate_structure
 
 WEB_TEMPLATE = Path(__file__).resolve().parent / 'web' / 'index.html'
 
@@ -33,10 +33,14 @@ def _resolved(work: Path, lesson_path: Path, strict: bool) -> tuple[dict, dict]:
     lesson.setdefault('folder', lesson.get('id'))
     if any(not isinstance(lesson.get(k), str) or not SLUG.fullmatch(lesson[k]) for k in ('id', 'folder')):
         raise BuildError('Lesson id and folder must be lowercase slugs, not file paths.')
-    errors, _ = validate(lesson, analysis, strict=strict, hand_typed=Path(lesson_path).suffix == '.json')
+    measured = bool(PLACEHOLDER.search(json.dumps(lesson))) or Path(lesson_path).suffix == '.py'
+    if measured:
+        errors, _ = validate(lesson, analysis, strict=strict, hand_typed=Path(lesson_path).suffix == '.json')
+    else:
+        errors, _ = validate_structure(lesson, analysis['duration'])
     if errors:
         raise BuildError('the lesson has errors; run `check` first:\n  ' + '\n  '.join(errors))
-    out = resolve_lesson(lesson, analysis)
+    out = resolve_lesson(lesson, analysis) if measured else lesson.copy()
     for k in ('draft', 'reviewNotes'):
         out.pop(k, None)
     return out, analysis
@@ -46,7 +50,7 @@ def _video(work: Path) -> Path:
     for name in ('upload.mp4', 'source.mp4'):
         if (work / name).exists():
             return work / name
-    raise BuildError(f'no video in {work}')
+    raise BuildError(f'3D bundle export needs matching MP4 playback as upload.mp4 or source.mp4 in {work}.')
 
 
 def build_web(work: Path, lesson_path: Path, out_root: Path, strict=False) -> Path:

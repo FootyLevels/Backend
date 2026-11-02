@@ -211,6 +211,16 @@ def test_the_app_bundle_holds_a_resolved_lesson_and_the_motion(work, tmp_path):
     assert json.loads((bundle / 'mesh.json').read_text()) == {'vertexCount': 3869, 'footSets': {'left': [1], 'right': [2]}}
 
 
+def test_numeric_lesson_build_reuses_assets_without_legacy_measurement_validation(work, tmp_path):
+    numeric = json.loads((PACKAGE / 'examples' / 'hocus-pocus' / 'lesson.resolved.json').read_text())
+    (work / 'lesson.json').write_text(json.dumps(numeric))
+    bundle = build.build_app(work, work / 'lesson.json', tmp_path / 'numeric-app')
+    result = json.loads((bundle / 'lesson.json').read_text())
+    assert result['skills'] == numeric['skills']
+    assert '{{' not in (bundle / 'lesson.json').read_text()
+    assert (bundle / 'motion' / 'faces.bin').read_bytes() == (work / 'analysis' / 'motion' / 'faces.bin').read_bytes()
+
+
 def test_the_web_lesson_ships_motion_as_text(work, tmp_path):
     folder = build.build_web(work, work / 'lesson.json', tmp_path / 'web')
     assert (folder / 'index.html').read_text().count('<title>Hocus Pocus Lesson</title>') == 1
@@ -370,21 +380,34 @@ def test_a_reading_of_zero_is_flagged():
 # --- the API authoring prompt -------------------------------------------------------------------
 
 @pytest.fixture
-def prompt_work(work):
-    ev = work / 'evidence'
-    ev.mkdir()
-    (ev / 'evidence.md').write_text('# Evidence for x\n\n## Shot 0: 0.00–3.37 s\n\n- Overview: ![shot 0](shot-0.jpg)\n'
-                                    '- Touch burst 0: 3.73–4.83 s (5 touches)\n  - Close-up: ![burst 0](b.jpg)\n')
+def prompt_work(tmp_path, monkeypatch):
+    from lesson_pipeline import prompting
+    work = tmp_path / 'video-only'
+    work.mkdir()
+    (work / 'upload.mp4').write_bytes(b'video')
+    monkeypatch.setattr(prompting, 'video_metadata',
+                        lambda *args, **kwargs: {'duration': 9.23, 'fps': 30, 'frameCount': 277}, raising=False)
     return work
 
 
-def test_the_prompt_carries_the_format_rules_and_measurements(prompt_work):
+def test_the_prompt_contains_only_video_instructions_and_schema(prompt_work):
     from lesson_pipeline.prompting import make_prompt
     prompt = make_prompt(prompt_work, 'my-move')
-    assert '"id": "my-move"' in prompt and '0–3.37 s, 3.37–7.4 s, 7.4–9.23 s' in prompt
+    assert 'my-move' in prompt and '9.23' in prompt
     assert '"$schema"' in prompt
-    assert 'Feet by job, not side' in prompt
-    assert '{{touchesText A B [role]}}' in prompt
-    assert 'Touch burst 0: 3.73–4.83 s' in prompt and '![' not in prompt and '### Shot 0' in prompt
-    assert '"skills"' in prompt.split('A finished lesson')[1]
-    assert not (prompt_work / 'handoff').exists()
+    assert 'Watch' in prompt and 'Practise' in prompt
+    for excluded in ('A finished lesson', 'hocus-pocus', 'What the 3D measured',
+                     'Touch burst', '{{touchesText', '4.43'):
+        assert excluded not in prompt
+    assert not (prompt_work / 'analysis').exists()
+    assert not (prompt_work / 'evidence').exists()
+
+
+def test_optional_analysis_and_evidence_do_not_change_the_minimal_prompt(prompt_work):
+    from lesson_pipeline.prompting import make_prompt
+    baseline = make_prompt(prompt_work, 'my-move')
+    (prompt_work / 'analysis').mkdir()
+    (prompt_work / 'analysis' / 'analysis.json').write_text('{"forbidden":"SHOULD_NOT_SEND_ANALYSIS"}')
+    (prompt_work / 'evidence').mkdir()
+    (prompt_work / 'evidence' / 'evidence.md').write_text('SHOULD_NOT_SEND_EVIDENCE')
+    assert make_prompt(prompt_work, 'my-move') == baseline

@@ -1,40 +1,48 @@
 # Lesson package format (version 1)
 
 A lesson teaches the moves in one football video, in four stages: **Watch → Break it down →
-Practise → Test yourself**, with the original video and the reconstructed 3D body on one clock.
+Practise → Test yourself**. Default authoring uses the original video, shared instructions and
+schema. It produces qualitative teaching content and numeric timestamps. When matching 3D assets
+are available, the app/web package plays that body and the original video on one clock.
 One video can hold several skills (moves); each skill has its own phases, drills and challenges.
 
-The machine-readable schema is [`schema/lesson.schema.json`](schema/lesson.schema.json). The
-checker (`python -m lesson_pipeline check`) enforces it plus the rules below.
+The base machine-readable contract is [`schema/lesson.schema.json`](schema/lesson.schema.json).
+The default API request uses its numeric-timestamp form, with qualitative `shows` text. The
+checker (`python -m lesson_pipeline check`) checks structure and timing; `--measured` explicitly
+enables the retained analysis/placeholder checks for older measured lessons.
 
 ## Work folder
 
-`run` creates one folder per video:
+Use one folder per source video. Authoring needs only a supported local video; reconstruction
+and evidence files are optional and are not included in the default model request.
 
 | Path | What |
 |---|---|
-| `source.mp4` / `upload.mp4` | the original, and the copy sent to the GPU (≤1280 px tall, no audio). Lessons use `upload.mp4`. |
-| `cuts.json` | scene cuts in seconds |
-| `project/`, `part-*/` | the backend's motion, and any segment re-run on its own |
-| `analysis/` | `analysis.json`, `mesh.json`, `motion/` (see below) |
-| `evidence/` | `evidence.md` and contact sheets; the API prompt includes the measured text |
-| `lesson.draft.json` | the automatic draft |
+| `source.<extension>` / `upload.mp4` | selected source or existing prepared copy; authoring uses the chosen video's clock and available audio |
+| `cuts.json` | optional reconstruction scene cuts in seconds |
+| `project/`, `part-*/` | optional backend motion and segment reruns |
+| `analysis/` | optional `analysis.json`, `mesh.json`, `motion/`; required by existing 3D exporters |
+| `evidence/` | optional measured evidence and contact sheets for experiments/operator inspection |
+| `lesson.draft.json` | optional diagnostic draft from motion analysis |
 | `generation/run-<uuid>/` | API audit: `prompt.md`, `response-N.txt`, `validation-N.json` and `run.json` |
 | `lesson.json` | the validated API-authored lesson; a failed run preserves the previous valid lesson |
 | `build/` | built outputs |
 
 ## API authoring
 
-`generate` sends the prepared video and a fixed prompt to a configurable Gemini model, defaulting
+`generate [VIDEO]` sends the selected video and a fixed prompt to a configurable Gemini model, defaulting
 through `--model`, then `GEMINI_MODEL`, then `gemini-4-argon`. Credentials come only from
-`GEMINI_API_KEY` or `GOOGLE_API_KEY`. The prompt includes this schema, the writing rules, the work
-folder's measurements and a finished example. Video is sampled at 5 fps for fast skill movements.
+`GEMINI_API_KEY` or `GOOGLE_API_KEY`. The prompt includes only shared instructions, the lesson
+schema and basic metadata from the video. It includes no finished example, externally detected cuts,
+motion evidence, measurements or draft. Video is sampled at 5 fps for fast skill movements.
 
 The generator owns `schemaVersion`, `id`, `folder` and `video`; model output cannot choose an asset
-path. The returned JSON must pass the schema and strict measurement/content validation. Repair
+path. The returned JSON must pass mechanical structure, finite-number, reference and timing checks. Repair
 attempts are bounded (`--attempts`, default 3, maximum 5), and invalid output is retained only as
 an audit response. Successful output replaces `lesson.json` atomically. API requests and uploads
-are provider operations; offline tests do not verify a real model's response quality.
+are provider operations; offline tests do not verify a real model's response quality. The checker
+does not establish educational effectiveness or factual coaching accuracy. Human review remains
+separate from mechanical acceptance.
 
 The uploaded provider file is removed on a best-effort basis when the run ends. Audit files contain
 prompts, generated content and validation outcomes; do not publish them alongside private source
@@ -65,10 +73,10 @@ videos without reviewing their contents. The key is never included in these file
 | Field | Meaning |
 |---|---|
 | `id`, `name`, `short`, `tab` | slug; full name; short name for headings; small label above the tab (e.g. "Skill 1 · named", "Level 3") |
-| `ballFoot` | `"left"` or `"right"`: which **measured** foot works the ball (the draft picks the one with most touches). The page calls it the *ball foot* (orange) and the other the *standing foot* (blue); never name sides in text. |
+| `ballFoot` | `"left"` or `"right"`: display-colouring hint for the foot working the ball. Default authoring infers it from the video; uncertain side identity belongs in `unsure`. Existing measured lessons may derive it from reconstructed contacts. Prefer *ball foot* and *standing foot* in teaching text. |
 | `ballLeavesGround` | `false` keeps the ball on the turf and never says "in the air" (ground moves). |
 | `range`, `watch` | `[start, end]` seconds of the video this skill covers; `watch` is the part played at full speed in stage 1. |
-| `watchTitle`, `intro`, `adds`, `breakdownIntro` | stage text; `adds` explains what the 3D adds for this move. |
+| `watchTitle`, `intro`, `adds`, `breakdownIntro` | stage text; `adds` can explain what to inspect from another view when matching 3D playback is available. |
 | `notice` | `[{t, title, text}]` moments to look for in stage 1 |
 | `unsure` | what this clip cannot tell us (shown in stage 1) |
 | `phases` | ordered, non-overlapping, inside `range` |
@@ -81,7 +89,7 @@ videos without reviewing their contents. The key is never included in these file
 { "id": "chop", "name": "Plant and chop", "start": 4.95, "end": 5.30, "key": 5.03,
   "cue": "Plant beside the ball; chop it behind your standing leg.",   // the coaching cue, imperative
   "video": "What to look at in the video.",
-  "shows": "What the 3D measured, with placeholders: his hips swing about {{turn 4.95 5.4}}°.",
+  "shows": "He plants beside the ball, turns his body and changes direction.",
   "conf": "medium", "why": "Why that confidence.",
   "ov": { "prints": true, "paths": true, "ghost": true, "arrow": true },   // overlays to switch on
   "focus": "turn",       // reading to highlight: weight | stand | ball | turn | balls | drop
@@ -89,7 +97,9 @@ videos without reviewing their contents. The key is never included in these file
   "turn": true }         // show the turn readout during this phase
 ```
 
-`key` is the frame the lesson freezes on: the clearest moment of the phase.
+`key` is the frame the lesson freezes on: the clearest moment of the phase. Default `shows` text
+is qualitative. Overlay, focus and camera options control the renderer when playback assets exist;
+they do not establish calibrated measurements.
 
 ### Drill
 `{ id, title, lvl, reps, how, model: [start, end, rate], checks: [3 self-checks] }` — `model` is
@@ -104,7 +114,11 @@ the clip the "Model" button loops; `rate` 0.25, 0.5 or 1.
 
 ## Placeholders: numbers come from the 3D
 
-Text never types a measured number. Write a placeholder and the build fills it in. `A`, `B` and `T`
+The following syntax is retained for existing measured lessons and optional experiments. It is
+not part of default API authoring, which uses numeric video timestamps and qualitative descriptions.
+Use it only with matching analysis and an explicit measured check. Do not invent measured values.
+
+In a measured lesson, write a placeholder and the build fills it in. `A`, `B` and `T`
 are seconds on the video clock; `role` is `ball` (the skill's `ballFoot`) or `stand` (the other foot),
 never `left` or `right`; `[role]` may be left out to count both feet.
 
@@ -122,7 +136,7 @@ never `left` or `right`; `[role]` may be left out to count both feet.
 | `{{weightPct role A B}}` | average share of the weight toward that foot, % |
 
 A numeric field may be a lone placeholder: `"target": "{{firstTouch 1.6 2.2 ball}}"`. If a
-placeholder can't be computed (no touch there, foot not planted), `check` reports it.
+placeholder can't be computed (no touch there, foot not planted), `check --measured` reports it.
 
 ## `analysis.json`
 
@@ -143,3 +157,7 @@ because some hosts refuse binaries) and `video.mp4`.
 `analysis.json`, `mesh.json` (light mesh foot sets), `video.mp4` and `motion/` in the backend's
 MotionSequence format (`sequence.json`, `faces.bin` uint32, `body-NNNNNN.bin.gz` uint16), so the
 app's motion player loads it unchanged. The app lists every `Lesson-*.bundle` it ships with.
+
+Both existing exporters require the matching analysis, mesh and motion assets. A valid video-only
+authored `lesson.json` is not by itself a complete 3D lesson bundle. Asset preparation and actual
+Swift/device acceptance are separate steps; the developer CLI adds no authenticated lesson route.

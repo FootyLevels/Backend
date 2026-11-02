@@ -5,14 +5,15 @@
   analyze    --work DIR                         (re)run the analysis from downloaded motion
   evidence   --work DIR                         contact sheets + evidence.md
   draft      --work DIR [--title T]             lesson.draft.json from the measurements
-  generate   --work DIR [--id ID] [--model ID]  video + measurements → validated lesson via Gemini API
-  check      --work DIR [--lesson F] [--strict] validate a lesson against the analysis
+  generate   [VIDEO] --work DIR [--id ID]      video → lesson via Gemini API
+  check      --work DIR [--lesson F]          mechanical schema/timestamp validation
   build      --work DIR [--lesson F] [--web OUT] [--app OUT]
   integrate  --work DIR --frontend REPO         build the app bundle and copy it into the app
 """
 from __future__ import annotations
 
 import argparse
+import hashlib
 import json
 import os
 import re
@@ -22,13 +23,14 @@ from pathlib import Path
 
 from . import analysis, build, cuts, draft, evidence, generation, remote
 from .authoring import load_lesson
-from .validate import validate
+from .prompting import VIDEO_MIMES, PromptError, video_metadata, video_path
+from .validate import validate, validate_structure
 
 
 def _work(args) -> Path:
     work = Path(args.work).expanduser().resolve()
     if not work.is_dir():
-        sys.exit(f'No work folder at {work}. Start with `run`.')
+        sys.exit(f'No work folder at {work}. Start with `generate VIDEO --work DIR`.')
     return work
 
 
@@ -80,10 +82,16 @@ def _lesson(work: Path, args) -> Path:
 
 def cmd_check(args) -> int:
     work = _work(args)
-    a = json.loads((work / 'analysis' / 'analysis.json').read_text())
     path = _lesson(work, args)
-    lesson = load_lesson(path, a)
-    errors, warnings = validate(lesson, a, strict=args.strict, hand_typed=path.suffix == '.json')
+    if args.measured:
+        analysis = json.loads((work / 'analysis' / 'analysis.json').read_text())
+        lesson = load_lesson(path, analysis)
+        errors, warnings = validate(lesson, analysis, strict=args.strict, hand_typed=path.suffix == '.json')
+    else:
+        if path.suffix != '.json':
+            sys.exit('Use --measured for trusted legacy lesson scripts.')
+        lesson = json.loads(path.read_text())
+        errors, warnings = validate_structure(lesson, video_metadata(work)['duration'])
     for e in errors:
         print(f'ERROR   {e}')
     for w in warnings:
@@ -92,10 +100,32 @@ def cmd_check(args) -> int:
     return 1 if errors else 0
 
 
+def _import_video(video, work):
+    source, work = Path(video).expanduser().resolve(), Path(work).expanduser().resolve()
+    if not source.is_file() or source.suffix.lower() not in VIDEO_MIMES:
+        raise PromptError('Supply a supported local video file.')
+    work.mkdir(parents=True, exist_ok=True)
+    try:
+        existing = video_path(work)
+    except PromptError:
+        existing = None
+    if existing:
+        with source.open('rb') as first, existing.open('rb') as second:
+            same = hashlib.file_digest(first, 'sha256').digest() == hashlib.file_digest(second, 'sha256').digest()
+        if not same:
+            raise PromptError('This work folder has a different video; use a new work folder.')
+        return existing
+    destination = work / ('source' + source.suffix.lower())
+    shutil.copyfile(source, destination)
+    return destination
+
+
 def cmd_generate(args) -> None:
+    if args.video:
+        _import_video(args.video, args.work)
     work = _work(args)
     path = generation.generate(work, args.id or _slug(work.name), model=args.model, max_attempts=args.attempts)
-    print(f'lesson: {path}\nNext: check --work {work} --strict, then build or integrate.')
+    print(f'lesson: {path}\nNext: check --work {work}, then review the content. 3D packaging needs its separate assets.')
 
 
 def main(argv=None) -> int:
@@ -116,6 +146,7 @@ def main(argv=None) -> int:
         s = sub.add_parser(name)
         s.add_argument('--work', required=True)
         if name == 'generate':
+            s.add_argument('video', nargs='?', help='source video to copy without transcoding or audio removal')
             s.add_argument('--id', help='lesson id (slug); defaults to the work folder name')
             s.add_argument('--model', default=os.environ.get('GEMINI_MODEL') or generation.DEFAULT_MODEL)
             s.add_argument('--attempts', type=int, choices=range(1, 6), default=3,
@@ -126,7 +157,8 @@ def main(argv=None) -> int:
         if name in ('check', 'build', 'integrate'):
             s.add_argument('--lesson', help='lesson file (default: WORK/lesson.json)')
         if name == 'check':
-            s.add_argument('--strict', action='store_true', help='treat a draft as an error')
+            s.add_argument('--measured', action='store_true', help='check legacy lessons using analysis/measurement placeholders')
+            s.add_argument('--strict', action='store_true', help='apply legacy measured-lesson completion rules with --measured')
         if name == 'build':
             s.add_argument('--web', help='folder to write the web lesson into')
             s.add_argument('--app', help='folder to write the app bundle into')

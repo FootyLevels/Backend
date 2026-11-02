@@ -21,13 +21,14 @@ The diagram index distinguishes implemented components from pending acceptance.
 
 ## Lesson generation (FP-72)
 
-The [lesson pipeline](lesson_pipeline/README.md) turns a football video and its reconstructed motion
-into the fixed **Watch → Break it down → Practise → Test yourself** lesson format consumed by the
-Swift app. It was extracted from `3d-model-backend`'s `FP-72-lesson-pipeline` prototype. Multimodal
-authoring now runs through an API key (`gemini-4-argon` by default), with schema and measurement
-validation, bounded repair attempts and the existing Swift/web packaging. Install the optional
-`lessons` dependencies and follow the pipeline README. This developer CLI uses an explicitly
-configured lesson GPU runtime; it does not add a cloud lesson endpoint or change deployed services.
+The [lesson pipeline](lesson_pipeline/README.md) authors the fixed **Watch → Break it down →
+Practise → Test yourself** format from **video + shared instructions + schema**. The default request
+contains no reference example, external cuts or reconstructed-motion evidence. API-key authoring
+(`gemini-4-argon` by default) needs no GPU or analysis assets; mechanical validation and bounded
+repair attempts preserve the output contract. The code was extracted from `3d-model-backend`'s
+`FP-72-lesson-pipeline` prototype. Its existing Swift/web 3D exporters separately need matching
+motion assets. Install the optional `lessons` dependencies and follow the pipeline README.
+This developer CLI does not add a cloud lesson endpoint or change deployed services.
 
 ## Original local pipeline
 

@@ -1,6 +1,8 @@
 """API authoring at the SDK boundary; no provider, key, GPU or network required."""
 import copy
 import json
+import shutil
+import subprocess
 from pathlib import Path
 from types import SimpleNamespace
 
@@ -8,25 +10,24 @@ import pytest
 
 pytest.importorskip('jsonschema', reason='Install the optional lessons extra for API authoring tests')
 
-from lesson_pipeline import generation
+from lesson_pipeline import generation, prompting
 
 
 EXAMPLE = Path(__file__).resolve().parents[1] / 'lesson_pipeline' / 'examples' / 'hocus-pocus'
 
 
 @pytest.fixture
-def work(tmp_path):
-    (tmp_path / 'analysis').mkdir()
-    (tmp_path / 'analysis' / 'analysis.json').write_text((EXAMPLE / 'analysis.json').read_text())
-    (tmp_path / 'evidence').mkdir()
-    (tmp_path / 'evidence' / 'evidence.md').write_text('# Evidence\n\n## Shot 0\n- Measurements available.\n')
+def work(tmp_path, monkeypatch):
+    metadata = {'duration': 9.233333333333333, 'fps': 30, 'frameCount': 277}
+    probe = lambda *args, **kwargs: metadata.copy()
+    monkeypatch.setattr(generation, 'video_metadata', probe, raising=False)
     (tmp_path / 'upload.mp4').write_bytes(b'fixture-video')
     return tmp_path
 
 
 @pytest.fixture
 def lesson():
-    return json.loads((EXAMPLE / 'lesson.json').read_text())
+    return json.loads((EXAMPLE / 'lesson.resolved.json').read_text())
 
 
 def uploaded(state='ACTIVE'):
@@ -99,6 +100,14 @@ def test_generation_uploads_the_video_and_publishes_a_checked_lesson(work, lesso
     assert list((work / 'generation').glob('run-*/response-1.txt'))
 
 
+def test_direct_mov_input_is_uploaded_with_its_actual_mime_type(work, lesson):
+    (work / 'upload.mp4').rename(work / 'source.mov')
+    sdk = client([json.dumps(lesson)])
+    run(work, sdk)
+    assert sdk.files.uploads[0]['file'] == work / 'source.mov'
+    assert sdk.files.uploads[0]['config']['mime_type'] == 'video/quicktime'
+
+
 def test_generation_waits_for_upload_processing(work, lesson):
     sdk = client([json.dumps(lesson)], states=('PROCESSING', 'PROCESSING', 'ACTIVE'))
     run(work, sdk)
@@ -142,19 +151,38 @@ def test_malformed_model_output_is_repaired_using_a_bounded_attempt(work, lesson
     assert list((work / 'generation').glob('run-*/validation-1.json'))
 
 
-def test_a_semantic_warning_requires_repair(work, lesson):
+def test_a_video_only_lesson_needs_no_analysis_or_evidence(work, lesson):
+    assert not (work / 'analysis').exists() and not (work / 'evidence').exists()
+    sdk = client([json.dumps(lesson)])
+    run(work, sdk)
+    assert len(sdk.models.requests) == 1
+    receipt = json.loads(next((work / 'generation').glob('run-*/run.json')).read_text())
+    assert 'analysisSha256' not in receipt
+    request = str(sdk.models.requests[0])
+    assert 'A finished lesson' not in request
+    assert 'What the 3D measured' not in request
+
+
+def test_model_can_choose_shot_boundaries_from_the_video(work, lesson):
+    lesson['shots'] = [{'start': 0, 'end': 9.23, 'label': 'Full clip'}]
+    sdk = client([json.dumps(lesson)])
+    written = json.loads(run(work, sdk).read_text())
+    assert written['shots'] == lesson['shots']
+    assert len(sdk.models.requests) == 1
+
+
+def test_out_of_video_times_require_structural_repair(work, lesson):
     broken = copy.deepcopy(lesson)
-    broken['skills'][0]['phases'][0]['shows'] = 'The left foot drops 40 cm.'
+    broken['skills'][0]['phases'][0]['key'] = 99
     sdk = client([json.dumps(broken), json.dumps(lesson)])
     run(work, sdk, max_attempts=2)
     assert len(sdk.models.requests) == 2
-    feedback = str(sdk.models.requests[1]['contents'])
-    assert 'placeholder' in feedback or 'left' in feedback
+    assert '99' in str(sdk.models.requests[1]['contents'])
 
 
-def test_model_cannot_change_shot_boundaries(work, lesson):
+def test_placeholder_output_requires_repair_without_hidden_measurements(work, lesson):
     broken = copy.deepcopy(lesson)
-    broken['shots'][0]['end'] -= 0.1
+    broken['skills'][0]['phases'][0]['shows'] = 'The body drops {{drop 0 1}} cm.'
     sdk = client([json.dumps(broken), json.dumps(lesson)])
     run(work, sdk, max_attempts=2)
     assert len(sdk.models.requests) == 2
@@ -272,3 +300,61 @@ def test_cli_run_forwards_remote_data_location(tmp_path, monkeypatch):
                      '--port', '8123', '--server-root', '/srv/lessons',
                      '--server-data', '/srv/private-data']) == 0
     assert servers == [(('owner@gpu', 8123, '/srv/lessons'), {'data_dir': '/srv/private-data'})]
+
+
+@pytest.mark.skipif(not shutil.which('ffmpeg') or not shutil.which('ffprobe'), reason='FFmpeg tools required')
+def test_metadata_comes_from_the_video_without_motion_analysis(tmp_path):
+    video = tmp_path / 'source.mp4'
+    subprocess.run(['ffmpeg', '-v', 'error', '-f', 'lavfi', '-i', 'color=c=green:s=64x64:r=30:d=1',
+                    '-c:v', 'libx264', '-pix_fmt', 'yuv420p', str(video)], check=True)
+    metadata = prompting.video_metadata(tmp_path)
+    assert metadata['duration'] == pytest.approx(1, abs=.05)
+    assert metadata['fps'] == pytest.approx(30)
+    assert not (tmp_path / 'analysis').exists()
+
+
+@pytest.mark.skipif(not shutil.which('ffprobe'), reason='FFprobe required')
+def test_corrupt_video_metadata_fails_before_any_provider_request(tmp_path):
+    (tmp_path / 'source.mp4').write_bytes(b'not a video')
+    with pytest.raises((prompting.PromptError, ValueError)):
+        prompting.video_metadata(tmp_path)
+
+
+def test_cli_generate_accepts_a_video_without_gpu_preparation(tmp_path, monkeypatch):
+    from lesson_pipeline import cli
+    source = tmp_path / 'recording.mov'
+    source.write_bytes(b'video-with-audio')
+    destination = tmp_path / 'minimal-work'
+    requests = []
+
+    def generate(work, lesson_id, **kwargs):
+        requests.append((work, lesson_id))
+        assert (work / 'source.mov').read_bytes() == source.read_bytes()
+        assert not (work / 'analysis').exists()
+        assert not (work / 'evidence').exists()
+        return work / 'lesson.json'
+
+    monkeypatch.setattr(cli.generation, 'generate', generate)
+    assert cli.main(['generate', str(source), '--work', str(destination), '--id', 'my-move']) == 0
+    assert requests == [(destination.resolve(), 'my-move')]
+
+
+def test_import_does_not_replace_a_different_existing_video(tmp_path):
+    from lesson_pipeline import cli
+    work = tmp_path / 'work'
+    work.mkdir()
+    saved = work / 'source.mp4'
+    saved.write_bytes(b'original')
+    incoming = tmp_path / 'replacement.mp4'
+    incoming.write_bytes(b'different')
+    with pytest.raises((ValueError, prompting.PromptError)):
+        cli._import_video(incoming, work)
+    assert saved.read_bytes() == b'original'
+
+
+def test_cli_check_uses_only_video_metadata_for_a_numeric_lesson(work, lesson, monkeypatch):
+    from lesson_pipeline import cli
+    (work / 'lesson.json').write_text(json.dumps(lesson))
+    monkeypatch.setattr(cli, 'video_metadata', lambda folder: {'duration': 9.233333333333333})
+    assert not (work / 'analysis').exists()
+    assert cli.main(['check', '--work', str(work), '--strict']) == 0

@@ -1,136 +1,118 @@
-# Lesson pipeline: football video → lesson in the app
+# Lesson pipeline: video → structured learning lesson
 
-This developer pipeline turns one football skills video into a lesson with a fixed structure:
-**Watch → Break it down → Practise → Test yourself**. The output is a `Lesson-<id>.bundle` for the
-FootyLevels Learn tab and, optionally, a standalone web lesson. One video can teach several moves.
+The default authoring input is **video + shared instructions + lesson schema**. Gemini identifies
+the moves, breaks them into phases, and writes cues, drills and questions in the fixed
+**Watch → Break it down → Practise → Test yourself** structure. It receives no reference lesson,
+external camera cuts, draft, motion measurements or reconstruction evidence.
 
-Code owns the lesson format, motion measurements, validation and packaging. A multimodal model
-watches the video and fills that format with move names, phases, cues, drills and questions. Lesson
-authoring uses the Gemini API with an API key; there is no Gemini app, clipboard or manual reply
-handoff. The default model is `gemini-4-argon`; `--model` selects another compatible Gemini model.
+This keeps the first application-integration baseline small enough to assess the model's own video
+interpretation. Additional context remains an optional experiment. The earlier context pilot's
+`video` arm included an example; it is not the new no-example baseline.
 
-The pipeline was extracted from
+The code was extracted from
 [`FootyLevels/3d-model-backend`, `FP-72-lesson-pipeline`](https://github.com/FootyLevels/3d-model-backend/tree/FP-72-lesson-pipeline),
-commit `0d06b891805ef0f68e9cc0544567ae5124489461`. Its version-1 lesson format, five examples and Swift
-bundle layout are preserved. This is an operator CLI in Backend; adding it does not create an
-authenticated cloud lesson-generation route or change the app's private reconstruction profile.
+commit `0d06b891805ef0f68e9cc0544567ae5124489461`. The version-1 Swift lesson shape, reference
+fixtures and 3D/web exporters are retained. This is a developer CLI in Backend. It does not create
+an authenticated cloud lesson endpoint or deploy a change to the Swift app.
 
 ## Setup
 
-- Python 3.11 or later, the Backend environment, and the lesson-generation dependencies:
+- Python 3.11 or later and the Backend lesson dependencies:
   ```bash
   cd Backend
   python -m pip install -e '.[lessons]'
   ```
-- `ffmpeg`, `ffprobe` and `rsync` available on the command line.
-- `GEMINI_API_KEY` (or `GOOGLE_API_KEY`) set in the environment of the process running `generate`.
-  Keep the key in local secret configuration; do not put it in arguments, lesson files or source
-  control. `GEMINI_MODEL` can set the default model when `--model` is omitted.
-- Key-based SSH access to a configured, dedicated lesson reconstruction runtime. You need its
-  loopback port, runtime folder and data folder. The compatible runtime code lives in
-  [`runtime/skill_lab`](../runtime/skill_lab/README.md). A run can occupy the GPU for several minutes;
-  use a runtime intended for lessons rather than the app's managed model process.
-- The Frontend checkout if you want to install a generated bundle in the app. Xcode is needed only
-  to build or verify the app.
+- `ffprobe` on the command line, to read local video metadata.
+- `GEMINI_API_KEY` (or `GOOGLE_API_KEY`) in the generator's environment. Keep the key in local
+  secret configuration, never in arguments, prompts or commits. `GEMINI_MODEL` sets the default
+  model when `--model` is omitted; otherwise the default is `gemini-4-argon`.
 
-The model call uploads the prepared video to Google. Gemini API requests may incur provider charges
-and are governed by the key's project configuration. The pipeline does not create a key or change
-billing settings. See Google's [video input guide](https://ai.google.dev/gemini-api/docs/video-understanding)
-and [Gemini 4 Argon model documentation](https://ai.google.dev/gemini-api/docs/models/gemini-4-argon).
+Authoring does not require a GPU, SSH, reconstructed motion, `analysis.json` or an evidence pack.
+The API uploads the selected video to Google and may incur provider charges. See Google's
+[video input guide](https://ai.google.dev/gemini-api/docs/video-understanding) and
+[Gemini 4 Argon documentation](https://ai.google.dev/gemini-api/docs/models/gemini-4-argon).
 
-## Generate a lesson
+## Generate and review
 
-Use a work folder outside the repositories, one per video.
+Use a work folder outside the repositories, one per video:
 
-1. Reconstruct and measure the video:
-   ```bash
-   python -m lesson_pipeline run clip.mp4 --work ~/lesson-work/elastico \
-     --host you@gpu-host --port PORT --server-root /path/to/Backend/runtime/skill_lab \
-     --server-data /path/to/lesson-runtime/data --id elastico --title "Elastico"
-   ```
-   This prepares a video-only upload, detects cuts, obtains reconstructed motion, computes the
-   measurements, and writes evidence and a draft. `--server-data` is needed when `SKILL_LAB_DATA`
-   puts the runtime's project files outside `<server-root>/data`.
+```bash
+python -m lesson_pipeline generate clip.mp4 --work ~/lesson-work/elastico --id elastico
+python -m lesson_pipeline check --work ~/lesson-work/elastico --strict
+```
 
-2. Ask the multimodal API to author the lesson:
-   ```bash
-   python -m lesson_pipeline generate --work ~/lesson-work/elastico --id elastico \
-     --model gemini-4-argon --attempts 3
-   ```
-   The request includes the video, fixed format, authoring rules, measured evidence and a finished
-   example. Video sampling is 5 fps to retain more fast-motion detail than the provider's default.
-   The pipeline validates returned JSON and sends checker feedback for a bounded number of repair
-   attempts (1–5, default 3). A failed run preserves any existing valid `lesson.json`.
+The optional positional video is copied into the workspace as `source` with its original extension.
+Omit it to use an existing prepared `upload.mp4` or supported `source` video. The selected file is
+what the model sees, including any audio it contains; a previously prepared silent copy remains
+silent. Video sampling is 5 fps.
 
-3. Check and review the result:
-   ```bash
-   python -m lesson_pipeline check --work ~/lesson-work/elastico --strict
-   ```
-   Read the lesson alongside the source video. Check move names, step timing, coaching claims and
-   uncertainty. Measured values remain placeholders filled from `analysis.json`, not model-invented
-   measurements. Read [`PLAYBOOK.md`](PLAYBOOK.md) for the content rules and acceptance criteria.
+The output is `lesson.json`, with numeric video timestamps and qualitative movement explanations.
+The generator checks JSON structure, finite values, in-video times and references. Bounded repair
+requests can fix these mechanical failures (`--attempts 1–5`, default 3). A failed run preserves
+any existing valid lesson. These checks do not establish correct coaching, contact, physics,
+learner understanding or educational effectiveness.
 
-4. Build and install:
-   ```bash
-   python -m lesson_pipeline build --work ~/lesson-work/elastico \
-     --web ~/lesson-work/web --app ~/lesson-work/app
-   python -m lesson_pipeline integrate --work ~/lesson-work/elastico --frontend ../Frontend
-   ```
-   The app discovers `Lesson-<id>.bundle` in `FootyLevels-Frontend/SampleData/Lessons/`. Integrating
-   writes that Frontend folder; building alone keeps outputs in the chosen output folders.
+Read the output alongside the video before accepting it. Check move grouping, useful phase
+boundaries, actionable cues, unsupported claims, unnecessary detail and uncertainty. The reusable
+authoring instructions live in `prompting.py`; [`PLAYBOOK.md`](PLAYBOOK.md) describes the review
+procedure, and [`SPEC.md`](SPEC.md) documents the lesson fields.
 
-`python -m lesson_pipeline <command> --help` lists the options. To repeat the measurement stage,
-pass `--reuse PROJECT_ID` to `run` against the same runtime and video. This skips the original
-project's inference; any segment that still needs a separate recovery run can use the GPU.
+```bash
+python -m lesson_pipeline generate clip.mp4 --work ~/lesson-work/elastico \
+  --id elastico --model gemini-4-argon --attempts 3
+```
 
-## What owns each step
+Audit files under `WORK/generation/run-<uuid>/` retain the prompt, replies, mechanical findings and
+execution metadata. They contain video-derived content; review them before sharing. The provider
+upload is deleted on a best-effort basis when the run finishes. API keys are never saved there.
 
-| Step | Owner |
-|---|---|
-| Video preparation, scene cuts, reconstruction and motion analysis | Code and the configured GPU runtime |
-| Move names, phases, cues, drills, questions and uncertainty | Multimodal API model |
-| Lesson structure, placeholder resolution and validation | Code |
-| Swift bundle and web packaging | Code |
-| Whether the lesson accurately teaches the visible move | Human review |
+## Optional reconstruction and app packaging
 
-The pipeline standardizes the expected output; it does not make model wording or judgment
-deterministic. No score or skill-correctness classifier is generated.
+The existing app and web exporters include a synchronized 3D viewer. Building those packages still
+requires matching `analysis/analysis.json`, `analysis/mesh.json` and `analysis/motion/` assets.
+Generating lesson text alone does not create that geometry or a complete runnable 3D lesson bundle.
 
-## Files
+Reuse matching saved assets when available. To prepare new assets, the retained reconstruction
+commands need FFmpeg, rsync, key-based SSH and a dedicated compatible GPU runtime:
 
-| Path | Purpose |
-|---|---|
-| [`PLAYBOOK.md`](PLAYBOOK.md) | Content rules and the operator procedure |
-| [`SPEC.md`](SPEC.md) | Version-1 lesson format, measurements and outputs |
-| [`schema/lesson.schema.json`](schema/lesson.schema.json) | Machine-readable lesson structure |
-| [`examples/`](examples/) | Five finished lessons and their measurement fixtures |
-| `cli.py`, `generation.py`, `prompting.py` | Commands, API generation and the fixed authoring prompt |
-| `remote.py` | Dedicated reconstruction runtime access over SSH |
-| `analysis.py`, `measures.py` | Motion measurements and numeric placeholders |
-| `evidence.py`, `draft.py` | Contact sheets, evidence and automatic draft |
-| `validate.py`, `authoring.py` | Lesson checks and loading |
-| `build.py` | Swift bundles, web output and integration |
-| `refs/`, `web/` | Shared body reference data and the web player |
+```bash
+python -m lesson_pipeline run clip.mp4 --work ~/lesson-work/elastico \
+  --host you@gpu-host --port PORT --server-root /path/to/Backend/runtime/skill_lab \
+  --server-data /path/to/lesson-runtime/data --id elastico
+```
 
-The app reader is `Frontend/FootyLevels-Frontend/Models/LessonPackage.swift`; its package player
-and lesson library already consume this bundle format. API attempts are recorded under
-`WORK/generation/run-<uuid>/` for review; the uploaded provider file is deleted on a best-effort
-basis after the run. These local audit files contain generated lesson content, not API keys.
+This optional path computes cuts, motion, measurements, evidence and a diagnostic draft. Those
+files are not added to the default Gemini authoring request. The runtime currently accepts clips
+up to 60 seconds. Use a lesson runtime rather than the managed app model process; `--reuse ID`
+can reuse the initial reconstruction, while recovery of missing segments may still use the GPU.
 
-## Verification and limits
+After human review and preparation of matching playback assets:
 
-To compare whether extra metadata helps authoring, see the controlled
-[context experiment](EXPERIMENTS.md). It retains independent first responses for human review.
+```bash
+python -m lesson_pipeline build --work ~/lesson-work/elastico \
+  --web ~/lesson-work/web --app ~/lesson-work/app
+python -m lesson_pipeline integrate --work ~/lesson-work/elastico --frontend ../Frontend
+```
 
-With `pip install -e '.[dev,lessons]'`, run
-`python -m pytest tests/test_lesson_pipeline.py tests/test_lesson_generation.py -q` for the
-offline pipeline and API-client regressions. These tests use fixtures/fake provider responses and
-do not spend provider credits. A real key-backed video generation, GPU run and app acceptance are
-separate checks; no live provider or GPU verification is implied by a passing offline suite.
+`integrate` writes `FootyLevels-Frontend/SampleData/Lessons/Lesson-<id>.bundle` in the selected
+Frontend checkout. Build alone keeps output in the chosen folders. Swift/device acceptance is a
+separate check. Neither command adds a cloud lesson-generation route.
 
-The current reconstruction runtime accepts at most 60 seconds per clip; longer source videos need
-to be trimmed before `run`. The model authoring command uses the prepared video's clock.
-One camera leaves depth, contact and ball height uncertain. Hip turns are camera-relative, and
-camera panning can invalidate a quoted turn. Fast footage can lose the ball or player track.
-Validation checks structure and consistency with the measurements; it cannot judge whether a cue
-or drill is correct. Review the generated lesson before adding it to a release.
+## Experiments and compatibility
+
+The [context experiment](EXPERIMENTS.md), advisory judge and five [reference fixtures](examples/)
+remain available for later investigation. They are not part of default generation. Existing
+measured lessons retain their placeholder syntax and deterministic resolution; use
+`check --measured` with matching analysis for those lessons. New baseline lessons use
+video-observed timestamps and qualitative descriptions.
+
+With `pip install -e '.[dev,lessons]'`, run:
+
+```bash
+python -m pytest tests/test_lesson_pipeline.py tests/test_lesson_generation.py -q
+```
+
+Offline checks use fixtures and fake provider responses. Report real API generation, GPU work and
+app acceptance separately. A single-camera model can still misread occluded feet, contact and
+fast motion even when the JSON is valid. No player score or execution-correctness classifier is
+generated.

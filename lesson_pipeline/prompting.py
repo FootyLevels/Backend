@@ -1,106 +1,96 @@
-"""Build the fixed lesson request from video measurements, schema and writing rules."""
+"""Minimal authoring context: source video, shared instructions and the lesson schema."""
 from __future__ import annotations
 
 import json
+import math
 import re
+import subprocess
+from fractions import Fraction
 from pathlib import Path
 
 PACKAGE = Path(__file__).resolve().parent
-EXAMPLE = 'hocus-pocus'          # the shortest finished lesson: one skill, every field in use
+VIDEO_MIMES = {'.mp4': 'video/mp4', '.mov': 'video/quicktime', '.webm': 'video/webm',
+               '.m4v': 'video/mp4', '.mpeg': 'video/mpeg', '.mpg': 'video/mpeg',
+               '.avi': 'video/avi', '.flv': 'video/x-flv', '.wmv': 'video/wmv', '.3gp': 'video/3gpp'}
 
 
 class PromptError(RuntimeError):
     pass
 
 
-def _between(text: str, start: str, end: str) -> str:
+def video_path(work: Path) -> Path:
+    for name in ('upload.mp4', *(f'source{suffix}' for suffix in VIDEO_MIMES)):
+        path = Path(work) / name
+        if path.is_file():
+            return path
+    raise PromptError(f'No source video in {work}; supply VIDEO to generate.')
+
+
+def video_metadata(work: Path) -> dict:
+    video = video_path(work)
     try:
-        a = text.index(start) + len(start)
-        return text[a:text.index(end, a)].strip()
-    except ValueError:
-        raise PromptError(f'could not find "{start}" … "{end}"; PLAYBOOK.md or SPEC.md changed shape')
+        response = subprocess.run(['ffprobe', '-v', 'error', '-select_streams', 'v:0',
+            '-show_entries', 'stream=duration,avg_frame_rate,r_frame_rate,width,height,nb_frames:format=duration',
+            '-of', 'json', str(video)], check=True, capture_output=True, text=True, timeout=30)
+        data = json.loads(response.stdout)
+        stream = data['streams'][0]
+        try:
+            duration = float(stream['duration'])
+        except (KeyError, ValueError, TypeError):
+            duration = float(data['format']['duration'])
+        try:
+            fps = float(Fraction(stream['avg_frame_rate']))
+        except (KeyError, ValueError, ZeroDivisionError):
+            fps = float(Fraction(stream['r_frame_rate']))
+        if not math.isfinite(duration) or duration <= 0 or not math.isfinite(fps) or fps <= 0:
+            raise ValueError()
+        if stream['width'] <= 0 or stream['height'] <= 0:
+            raise ValueError()
+        frame_count = stream.get('nb_frames', '')
+        frames = int(frame_count) if str(frame_count).isdecimal() else round(duration * fps)
+        return {'duration': duration, 'fps': fps, 'frameCount': frames,
+                'width': stream['width'], 'height': stream['height'], 'mimeType': VIDEO_MIMES[video.suffix.lower()]}
+    except (OSError, subprocess.SubprocessError, ValueError, KeyError, IndexError, ZeroDivisionError):
+        raise PromptError('Could not inspect the video. Check the file and FFprobe installation.') from None
 
 
-def _rules() -> tuple[str, str, str]:
-    playbook = (PACKAGE / 'PLAYBOOK.md').read_text()
-    spec = (PACKAGE / 'SPEC.md').read_text()
-    return (_between(playbook, '## 3. Decide the skills', '## 4.'),
-            _between(playbook, 'Then edit `lesson.json`. Rules:', '## 5.'),
-            _between(spec, '## Placeholders: numbers come from the 3D', '## `analysis.json`'))
+def lesson_schema() -> dict:
+    """Keep the Swift v1 shape, with numeric times and qualitative movement descriptions."""
+    schema = json.loads((PACKAGE / 'schema' / 'lesson.schema.json').read_text())
+    schema['$id'] = 'lesson.baseline.schema.json'
+    schema['description'] = 'A video-grounded learning lesson with numeric video timestamps.'
+    definitions = schema['$defs']
+    definitions.pop('placeholder', None)
+    definitions['time'] = {'type': 'number', 'minimum': 0, 'description': 'Seconds from the video start.'}
+    definitions['skill']['properties']['ballFoot']['description'] = (
+        'App display-colouring hint for the apparent ball foot. Explain ambiguity in unsure.')
+    definitions['phase']['properties']['shows']['description'] = (
+        'Qualitative visible movement to inspect; avoid unsupported physical measurements.')
+    return schema
 
 
-def _measurements(work: Path) -> str:
-    """evidence.md without its pictures: the model watches the video instead."""
-    path = work / 'evidence' / 'evidence.md'
-    if not path.exists():
-        raise PromptError(f'no {path}; run `run` (or `evidence`) first')
-    lines = [l for l in path.read_text().splitlines() if '](' not in l and not l.startswith('# ')]
-    return '\n'.join('#' + l if l.startswith('## ') else l for l in lines).strip()   # shots nest under this section
-
-
-def make_prompt(work: Path, lesson_id: str) -> str:
+def make_prompt(work: Path, lesson_id: str, *, metadata=None) -> str:
     if not re.fullmatch(r'[a-z0-9][a-z0-9-]{0,40}', lesson_id):
-        raise PromptError(f'lesson id {lesson_id!r} must be a short lowercase slug, e.g. hocus-pocus')
-    analysis = json.loads((work / 'analysis' / 'analysis.json').read_text())
-    video = next((work / n for n in ('upload.mp4', 'source.mp4') if (work / n).exists()), None)
-    if video is None:
-        raise PromptError(f'no video in {work}')
+        raise PromptError('Lesson id must be a short lowercase slug.')
+    data = metadata if metadata is not None else video_metadata(work)
+    return f'''Create a football learning lesson from the supplied video ({data['duration']:.6f} seconds).
 
-    fps, duration = analysis['fps'], analysis['duration']
-    shots = [(round(s['start'] / fps, 2), round(s['end'] / fps, 2)) for s in analysis['shots']]
-    skills_rules, writing_rules, placeholders = _rules()
-    schema = (PACKAGE / 'schema' / 'lesson.schema.json').read_text().strip()
-    example = json.dumps(json.loads((PACKAGE / 'examples' / EXAMPLE / 'lesson.json').read_text()), ensure_ascii=False, indent=1)
-    shot_list = ', '.join(f'{a:g}–{b:g} s' for a, b in shots)
+Teach the visible moves through Watch → Break it down → Practise → Test yourself.
+Identify the moves and useful teaching phases from the video. A camera edit need not be a new skill.
+Use short, actionable cues, explain what to watch, offer progressive drills and concrete self-checks,
+and include questions about visible actions. Prefer feet named by their role in teaching text.
+Use established move names only when supported; otherwise use descriptive names.
+Keep explanations qualitative. Do not invent physical measurements, forces or precise contact.
+Disclose unclear or hidden actions and give confidence reasons based on visibility.
+Do not score the player. Do not claim that questions or self-checks measure physical performance.
 
-    prompt = f"""# Write a football skills lesson from the attached video
+Return one JSON object following the schema, without Markdown fences.
+Set schemaVersion to 1, id and folder to "{lesson_id}", and video to "video.mp4".
+All times are numeric seconds on this video's clock. Infer shot and phase boundaries from the video;
+keep every time range within it and every skill's subranges within that skill.
+Use unique IDs and valid phase references. Credit only a source identifiable from the video;
+otherwise describe it as the supplied video. Include no template placeholders or draft flags.
 
-You are writing one lesson for FootyLevels, an app that teaches football skills. The attached video
-(video.mp4, {duration:.2f} s) shows one or more moves. Watch all of it, more than once and slowly where
-the move is fast. The lesson teaches each move in four stages: Watch → Break it down → Practise → Test
-yourself. The app shows your text beside the video and a 3D body reconstructed from it.
-
-## What to send back
-
-Reply with one JSON object and nothing else. Do not use Markdown code fences. It must follow "The lesson
-format" below exactly: the app only understands that format. Every time is seconds from the start of
-this video, the same clock the measurements below use.
-
-Fixed values (use exactly these):
-- "schemaVersion": 1, "id": "{lesson_id}", "folder": "{lesson_id}", "video": "video.mp4"
-- "shots": one entry per camera shot, with exactly these times: {shot_list}. Write each "label" yourself.
-
-Where the rules below say "evidence", "sheets" or "the draft", use the video itself; there is no draft.
-
-## Deciding the skills
-
-{skills_rules}
-
-## How to write it
-
-{writing_rules}
-
-## Numbers come from the 3D
-
-{placeholders}
-
-## What the 3D measured in this video
-
-{_measurements(work)}
-
-## The lesson format (JSON Schema)
-
-```json
-{schema}
-```
-
-## A finished lesson, for a different video
-
-Match its tone, detail and honesty, not its content.
-
-```json
-{example}
-```
-"""
-    return prompt
-
+Lesson schema:
+{json.dumps(lesson_schema(), ensure_ascii=False, indent=1)}
+'''
