@@ -119,6 +119,9 @@ basis after the run. These local audit files contain generated lesson content, n
 
 ## Verification and limits
 
+To compare whether extra metadata helps authoring, see the controlled
+[context experiment](EXPERIMENTS.md). It retains independent first responses for human review.
+
 With `pip install -e '.[dev,lessons]'`, run
 `python -m pytest tests/test_lesson_pipeline.py tests/test_lesson_generation.py -q` for the
 offline pipeline and API-client regressions. These tests use fixtures/fake provider responses and
