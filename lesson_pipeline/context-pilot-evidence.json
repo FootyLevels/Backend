@@ -1,0 +1,161 @@
+{
+  "date": "2026-11-02",
+  "experiment": "Three nested metadata contexts; two independent first responses per context",
+  "video": {
+    "name": "Chop and Spin",
+    "duration": 9.333333333333334,
+    "audio": false,
+    "sha256": "be1a00c9bfd618a71595559e81f27fd6d49bfe8ce5ec33a53b8954312f3c1e03"
+  },
+  "sharedSettings": {
+    "model": "gemini-4-argon",
+    "videoFPS": 5,
+    "temperature": 1,
+    "maxOutputTokens": 32768,
+    "reference": "Qualitative Hocus Pocus example",
+    "repairRequests": 0
+  },
+  "promptCharacters": {
+    "video": 23505,
+    "shots": 23891,
+    "reconstruction": 29674
+  },
+  "completed": 6,
+  "providerCleanup": "deleted",
+  "totalReportedTokens": 113241,
+  "jobs": [
+    {
+      "label": "Lesson 01",
+      "context": "reconstruction",
+      "repeat": 2,
+      "status": "complete",
+      "modelVersion": "gemini-4-argon",
+      "seconds": 80.39,
+      "counts": {
+        "skills": 3,
+        "phases": 12,
+        "drills": 12
+      },
+      "mechanicalErrors": 0,
+      "usage": {
+        "prompt_token_count": 14122,
+        "candidates_token_count": 7483,
+        "thoughts_token_count": null,
+        "total_token_count": 21605,
+        "cached_content_token_count": null
+      }
+    },
+    {
+      "label": "Lesson 02",
+      "context": "shots",
+      "repeat": 1,
+      "status": "complete",
+      "modelVersion": "gemini-4-argon",
+      "seconds": 90.46,
+      "counts": {
+        "skills": 3,
+        "phases": 12,
+        "drills": 12
+      },
+      "mechanicalErrors": 0,
+      "usage": {
+        "prompt_token_count": 11492,
+        "candidates_token_count": 7815,
+        "thoughts_token_count": 121,
+        "total_token_count": 19428,
+        "cached_content_token_count": null
+      }
+    },
+    {
+      "label": "Lesson 03",
+      "context": "shots",
+      "repeat": 2,
+      "status": "complete",
+      "modelVersion": "gemini-4-argon",
+      "seconds": 64.46,
+      "counts": {
+        "skills": 3,
+        "phases": 11,
+        "drills": 12
+      },
+      "mechanicalErrors": 0,
+      "usage": {
+        "prompt_token_count": 11492,
+        "candidates_token_count": 4865,
+        "thoughts_token_count": null,
+        "total_token_count": 16357,
+        "cached_content_token_count": 9438
+      }
+    },
+    {
+      "label": "Lesson 04",
+      "context": "video",
+      "repeat": 2,
+      "status": "complete",
+      "modelVersion": "gemini-4-argon",
+      "seconds": 79.26,
+      "counts": {
+        "skills": 3,
+        "phases": 10,
+        "drills": 12
+      },
+      "mechanicalErrors": 0,
+      "usage": {
+        "prompt_token_count": 11382,
+        "candidates_token_count": 7387,
+        "thoughts_token_count": null,
+        "total_token_count": 18769,
+        "cached_content_token_count": null
+      }
+    },
+    {
+      "label": "Lesson 05",
+      "context": "reconstruction",
+      "repeat": 1,
+      "status": "complete",
+      "modelVersion": "gemini-4-argon",
+      "seconds": 67.04,
+      "counts": {
+        "skills": 3,
+        "phases": 10,
+        "drills": 12
+      },
+      "mechanicalErrors": 0,
+      "usage": {
+        "prompt_token_count": 14122,
+        "candidates_token_count": 6694,
+        "thoughts_token_count": null,
+        "total_token_count": 20816,
+        "cached_content_token_count": null
+      }
+    },
+    {
+      "label": "Lesson 06",
+      "context": "video",
+      "repeat": 1,
+      "status": "complete",
+      "modelVersion": "gemini-4-argon",
+      "seconds": 60.25,
+      "counts": {
+        "skills": 3,
+        "phases": 12,
+        "drills": 12
+      },
+      "mechanicalErrors": 0,
+      "usage": {
+        "prompt_token_count": 11382,
+        "candidates_token_count": 4884,
+        "thoughts_token_count": null,
+        "total_token_count": 16266,
+        "cached_content_token_count": null
+      }
+    }
+  ],
+  "humanReview": "Pending; no automated teaching-quality score or preferred context",
+  "limits": [
+    "One silent clip; two samples per arm only.",
+    "Common schema, example and phase/drill counts remain fixed.",
+    "Implicit cached tokens reported for one request; latency is not an isolated performance benchmark.",
+    "Experiment output uses qualitative explanations and numeric times; production measurement-placeholder generation and Swift acceptance were not exercised."
+  ]
+}

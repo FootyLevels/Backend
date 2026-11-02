@@ -38,3 +38,11 @@ deployment, authenticated lesson API route, Frontend change or iPhone acceptance
 part of this migration. The operator CLI still needs prepared motion analysis; the
 current reconstruction runtime limits input to 60-second clips. Human review of move
 names, coaching cues, timing and uncertainty remains necessary even after validation.
+
+## Subsequent live context pilot
+
+After a key was supplied, the six independent context-experiment requests completed on
+2 November 2026. All passed their common mechanical checks without repair and provider upload
+cleanup succeeded. See [EXPERIMENTS.md](EXPERIMENTS.md) and its execution evidence. This pilot
+uses qualitative explanations and video timestamps; it does not establish human teaching quality,
+Swift acceptance, or live production `generate` placeholder/repair behavior.

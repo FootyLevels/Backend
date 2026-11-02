@@ -211,7 +211,8 @@ def render_report(output):
             for skill in lesson['skills']:
                 phases = ''.join(f"<tr><td>{esc(p['start'])}–{esc(p['end'])}s</td><td><b>{esc(p['name'])}</b>"
                                  f"<p>{esc(p['cue'])}</p><p>{esc(p.get('video', ''))}</p>"
-                                 f"<p>{esc(p.get('shows', ''))}</p></td></tr>" for p in skill['phases'])
+                                 f"<p>{esc(p.get('shows', ''))}</p><small>Confidence: {esc(p.get('conf', 'unspecified'))}"
+                                 f" · {esc(p.get('why', ''))}</small></td></tr>" for p in skill['phases'])
                 drills = ''.join(f"<li><b>{esc(d['title'])}</b>: {esc(d['how'])}</li>" for d in skill['drills'])
                 body += f"<h3>{esc(skill['name'])}</h3><p>{esc(skill['intro'])}</p><table>{phases}</table>"
                 body += f'<details><summary>Practice drills</summary><ol>{drills}</ol></details>'
@@ -222,7 +223,8 @@ def render_report(output):
             body = '<pre>' + esc(raw.read_text() if raw.exists() else job['status']) + '</pre>'
         diagnostics = {'status': job['status'], 'errors': result.get('errors'), 'warnings': result.get('warnings'),
                        'counts': job.get('counts'), 'usage': job.get('usage'), 'seconds': job.get('seconds')}
-        sections.append(f"<section id='{job['id']}'><h2>{job['label']}</h2>{body}"
+        raw_link = f"<p><a href='{job['id']}.txt'>Complete original JSON</a></p>" if (output / (job['id'] + '.txt')).exists() else ''
+        sections.append(f"<section id='{job['id']}'><h2>{job['label']}</h2>{raw_link}{body}"
                         '<details><summary>Mechanical diagnostics</summary><pre>' + esc(json.dumps(diagnostics, indent=2)) + '</pre></details></section>')
     mapping = '\n'.join(f"{j['label']}: {j['context']}, repetition {j['repeat']}" for j in manifest['jobs'])
     page = '''<!doctype html><meta charset="utf-8"><title>Lesson context comparison</title>
@@ -232,7 +234,8 @@ table{border-collapse:collapse;width:100%}td{padding:12px;border-bottom:1px soli
 pre{white-space:pre-wrap;overflow-wrap:anywhere;font-size:14px}summary{cursor:pointer;margin:16px 0}p{margin:8px 0}</style>
 <h1>Lesson context comparison</h1><p>Independent first responses from the same video and model. No repair feedback or automated teaching-quality score.</p>
 <p>Judge move grouping, phase boundaries, clear actionable cues, unsupported claims, unnecessary detail, and overall usefulness. Prefer the content before revealing conditions.</p>'''
-    page += '<video controls src="video.mp4"></video><p>Source video has no audio.</p>'
+    navigation = ' · '.join(f"<a href='#{j['id']}'>{j['label']}</a>" for j in manifest['jobs'])
+    page += '<video controls src="video.mp4"></video><p>Source video has no audio.</p><nav>' + navigation + '</nav>'
     page += ''.join(sections) + '<details><summary>Reveal experiment conditions</summary><pre>' + esc(mapping) + '</pre></details>'
     path = output / 'review.html'
     path.write_text(page)

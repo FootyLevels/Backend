@@ -66,3 +66,18 @@ The 2 November 2026 pilot uses the saved Chop and Spin video: 9.333333 seconds, 
 The matching existing reconstruction has 275 valid body frames and 162 ball frames. The finished
 Chop and Spin lesson is withheld from the model. All arms receive the same silent video;
 results do not establish behavior on clips with tutorial narration. No new GPU run is needed.
+
+## First pilot execution
+
+All six live Gemini 4 Argon requests completed, with no repairs and no mechanical findings.
+The provider file was deleted successfully. The recorded model version was `gemini-4-argon`
+for every response. Inputs were 11,382 tokens for video, 11,492 for shots, and 14,122 for
+reconstruction; total reported usage across the six calls was 113,241 tokens. One response
+reported implicit cached tokens, so elapsed times are descriptive rather than a latency benchmark.
+All six outputs contained three skills and twelve drills, with ten to twelve phases in total.
+These counts do not establish lesson quality or which context is preferable.
+
+The neutral-label review page and complete replies are kept in the local experiment output,
+outside the repository. Human content review is pending. Portable, credential-free execution
+metadata is in [context-pilot-evidence.json](context-pilot-evidence.json). The focused lesson and
+experiment suite passed 139 checks; the final review-rendering check passed all 21 experiment tests.
