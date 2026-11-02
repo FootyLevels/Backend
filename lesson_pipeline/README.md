@@ -119,11 +119,14 @@ basis after the run. These local audit files contain generated lesson content, n
 
 ## Verification and limits
 
-Run `python -m pytest tests/test_lesson_pipeline.py tests/test_lesson_generation.py -q` for the
+With `pip install -e '.[dev,lessons]'`, run
+`python -m pytest tests/test_lesson_pipeline.py tests/test_lesson_generation.py -q` for the
 offline pipeline and API-client regressions. These tests use fixtures/fake provider responses and
 do not spend provider credits. A real key-backed video generation, GPU run and app acceptance are
 separate checks; no live provider or GPU verification is implied by a passing offline suite.
 
+The current reconstruction runtime accepts at most 60 seconds per clip; longer source videos need
+to be trimmed before `run`. The model authoring command uses the prepared video's clock.
 One camera leaves depth, contact and ball height uncertain. Hip turns are camera-relative, and
 camera panning can invalidate a quoted turn. Fast footage can lose the ball or player track.
 Validation checks structure and consistency with the measurements; it cannot judge whether a cue

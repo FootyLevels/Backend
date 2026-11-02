@@ -6,6 +6,8 @@ from types import SimpleNamespace
 
 import pytest
 
+pytest.importorskip('jsonschema', reason='Install the optional lessons extra for API authoring tests')
+
 from lesson_pipeline import generation
 
 
