@@ -81,3 +81,41 @@ The neutral-label review page and complete replies are kept in the local experim
 outside the repository. Human content review is pending. Portable, credential-free execution
 metadata is in [context-pilot-evidence.json](context-pilot-evidence.json). The focused lesson and
 experiment suite passed 139 checks; the final review-rendering check passed all 21 experiment tests.
+
+## Optional advisory model judge
+
+To obtain a second opinion, the judge receives the same source video and the same learner-facing
+content from all six lessons, using stable random aliases. Generation prompts, conditions, model
+metadata, reference answers and reconstructed-motion evidence are withheld. Each candidate retains
+its own uncertainty statements; the judge could still infer aspects of a process from the wording.
+
+```sh
+python -m lesson_pipeline.judging prepare --results /path/to/experiment
+python -m lesson_pipeline.judging run --results /path/to/experiment
+```
+
+The two independent calls reverse presentation order, with no previous judge response supplied.
+The rubric distinguishes visible-video fidelity, useful breakdown, actionable clarity, uncertainty,
+practice progression and appropriate detail. Ties and abstention are allowed; extra length or phases
+alone should earn no credit. Major criticisms require lesson excerpts and video timestamps.
+The judge is not told a preferred skill/phase count or asked to infer the authoring method.
+
+The model's scores and rankings concern lessons, never player performance. They do not establish
+actual learner comprehension or expert coaching correctness. Using the same model family can retain
+shared misunderstandings and stylistic preferences. Two orders can expose instability but cannot
+separate order effects from sampling variation. Both assessments are preserved separately, with
+provider usage and cleanup status, in `judge/`. No automatic lesson revision follows a judgment.
+
+The first advisory review completed both live passes. Pass 1 preferred Lesson 02; the reversed
+order pass preferred Lessons 05 and 01 jointly. The reviewer also contradicted itself about which
+foot works the ball in the final spin. This is a concrete reason to inspect its criticisms rather
+than treat the rankings as acceptance. All 24 cited lesson excerpts were found in the supplied
+candidate text; that checks excerpt presence, not the accuracy of its video interpretation.
+Both reviews and their raw responses remain in the local `judge/` output. Provider cleanup
+succeeded. No lesson was automatically changed. Human review remains pending.
+
+Known LLM-judge limitations include position, verbosity and self-preference effects; see
+[Zheng et al.](https://arxiv.org/abs/2306.05685) and
+[Panickssery et al.](https://arxiv.org/abs/2404.13076). These studies do not establish a specific
+Gemini error rate for football coaching. In this pilot, order and sampling effects are confounded,
+and using the same model family may preserve shared misunderstandings.
