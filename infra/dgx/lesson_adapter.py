@@ -10,6 +10,7 @@ prepared 30 fps media) in DIRECTORY. Output: ``DIRECTORY/work`` laid out like a 
 import argparse
 import hashlib
 import json
+import os
 from pathlib import Path
 import shutil
 import socket
@@ -114,4 +115,6 @@ if __name__ == '__main__':
     parser.add_argument('--ffmpeg', type=Path, required=True)
     parser.add_argument('directory', type=Path)
     args = parser.parse_args()
+    # cuts/remote call ffmpeg and ffprobe by name; use the deployment's pinned toolchain.
+    os.environ['PATH'] = str(args.ffmpeg.parent) + os.pathsep + os.environ.get('PATH', os.defpath)
     lesson(args.directory, args.socket, args.ffmpeg)

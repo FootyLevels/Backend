@@ -40,7 +40,12 @@ if __name__ == "__main__":
         commands.append([sys.executable, str(Path(__file__).with_name("run_reconstruction_worker.py")),
             args.environment, "--adapter", str(args.reconstruction_adapter),
             "--adapter-arg=--socket=" + str(Path.home()/".local/share/footylevels/model-bridge/inference.sock"),
-            "--adapter-arg=--ffmpeg=" + str(Path.home()/"skill-lab/.media/bin/ffmpeg")])
+            "--adapter-arg=--ffmpeg=" + str(Path.home()/"skill-lab/.media/bin/ffmpeg"),
+            # Lesson jobs share the GPU runner; they stay queued unless the private
+            # runtime configuration also holds a Gemini key.
+            "--lesson-adapter", str(args.reconstruction_adapter.with_name("lesson_adapter.py")),
+            "--lesson-adapter-arg=--socket=" + str(Path.home()/".local/share/footylevels/model-bridge/inference.sock"),
+            "--lesson-adapter-arg=--ffmpeg=" + str(Path.home()/"skill-lab/.media/bin/ffmpeg")])
     workers = []
     stopped = threading.Event()
     def supervise():
