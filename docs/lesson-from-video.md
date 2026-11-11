@@ -63,11 +63,20 @@ Verified:
   produced an 8.1 MB bundle that passes `app_contract.check_bundle`. The five shipped app bundles
   also pass it.
 
+Deployed to Development (2026-11-11): API + workers at `ddcde8a`, GPU runtime at `0eeb478`
+(previous: API `367b37a`, runtime `4017f11`; rollback = stop the unit, repoint
+`~/.local/share/footylevels/{cloud-api,runtime}/current`, start). The Dev `runtime.json` holds the
+Gemini settings (backup: `runtime.json.before-lessons`). End-to-end in Dev with a throwaway account:
+real enqueue transaction → GPU runner claim → screening, `lesson-motion-v1` motion with ball
+tracking, grounded authoring (8 calls, 3 claims removed) → 11 files (7.9 MB) published under the
+lesson prefix → listed for the owner, project linked, signed downloads match size and SHA-256, the
+bundle passes `app_contract`. About 16 minutes for a 9.3 s clip (GPU ~5, authoring ~9). The test
+account was then deleted through the normal account-deletion path. The first Dev attempt failed
+because the service PATH lacks `ffprobe`; fixed in `ddcde8a`.
+
 Not verified yet:
-- The cloud path end to end (Firestore transactions in `lessons.py` / `lesson_jobs.py`, the
-  runner dispatch, `lesson_adapter.py` against the runtime's new `lesson-motion-v1` profile): it
-  needs the API, runner and runtime deployed to Development. The Firestore code mirrors the
-  reconstruction code; its admission logic (`lessons.admit`) is unit-tested.
+- The HTTP layer with a real Firebase sign-in from the app (the Dev check called the same
+  repository code server-side), and the 403/409/429 refusals against live Firestore.
 - Runtime budgets for 20 s clips at the new profile; measure seconds per frame before raising
   `LESSON_MAX_SECONDS`.
 - iOS: Frontend branch `codex/lesson-from-video` builds for the simulator (Xcode 26.4) and the app
