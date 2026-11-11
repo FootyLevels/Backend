@@ -1,0 +1,70 @@
+{
+  "date": "2026-11-02",
+  "model": "gemini-4-argon",
+  "sourceVideoSha256": "be1a00c9bfd618a71595559e81f27fd6d49bfe8ce5ec33a53b8954312f3c1e03",
+  "protocol": "Two independent reviews; stable random aliases; reversed presentation order; same video and learner-facing content; no generation context provided",
+  "passes": [
+    {
+      "number": 1,
+      "status": "complete",
+      "promptHash": "e1d63026e49439caf333927f1664a6877a66c8ec4e96e311595291d98945580d",
+      "modelVersion": "gemini-4-argon",
+      "seconds": 38.69,
+      "usage": {
+        "prompt_token_count": 48109,
+        "candidates_token_count": 3200,
+        "total_token_count": 51309,
+        "cached_content_token_count": null
+      },
+      "rankingTiers": [
+        [
+          "Lesson 02"
+        ],
+        [
+          "Lesson 06",
+          "Lesson 05",
+          "Lesson 01"
+        ],
+        [
+          "Lesson 03",
+          "Lesson 04"
+        ]
+      ],
+      "quotesMatched": 10,
+      "quotesChecked": 10
+    },
+    {
+      "number": 2,
+      "status": "complete",
+      "promptHash": "e1d3afe0d27cfa9330bd6fc033017478fa3ebbe24149b25d09fd4c2f5ae5dff5",
+      "modelVersion": "gemini-4-argon",
+      "seconds": 44.28,
+      "usage": {
+        "prompt_token_count": 48109,
+        "candidates_token_count": 3672,
+        "total_token_count": 51781,
+        "cached_content_token_count": null
+      },
+      "rankingTiers": [
+        [
+          "Lesson 05",
+          "Lesson 01"
+        ],
+        [
+          "Lesson 02"
+        ],
+        [
+          "Lesson 06",
+          "Lesson 04"
+        ],
+        [
+          "Lesson 03"
+        ]
+      ],
+      "quotesMatched": 14,
+      "quotesChecked": 14
+    }
+  ],
+  "providerCleanup": "deleted",
+  "interpretation": "Advisory only. Rankings changed and the judge contradicted its left/right interpretation of the same final spin. No preferred authoring context established; human review pending."
+}

@@ -1,0 +1,16 @@
+{
+  "date": "2026-11-02",
+  "implementation": "26f3f40",
+  "model": "gemini-4-argon",
+  "context": "video-instructions-schema",
+  "videoSha256": "be1a00c9bfd618a71595559e81f27fd6d49bfe8ce5ec33a53b8954312f3c1e03",
+  "promptSha256": "ab81872545dd3b483e7cf77e2bddee2d3a229e0e0430cdffbad29d139caf3d5f",
+  "promptCharacters": 11107,
+  "attempts": 1,
+  "status": "complete",
+  "providerCleanup": "deleted",
+  "analysisOrEvidencePresent": false,
+  "mechanicalCheck": "passed",
+  "humanContentReview": "pending",
+  "limits": "No GPU processing, Swift installation, authenticated cloud endpoint or app deployment was exercised."
+}

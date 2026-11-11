@@ -1,0 +1,1186 @@
+<title>Skill Lesson</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@500;600;700&family=Atkinson+Hyperlegible:wght@400;700&family=IBM+Plex+Mono:wght@500&display=swap">
+<style>
+/* Layout: a touchline coaching console. The stage (original video + 3D body) sits over a
+   timeline of the chosen skill's phases; the lesson for the current stage runs beside it on
+   wide screens and below it on phones. The 3D stage is a dark tactics board in both themes. */
+:root {
+  --paper: #F1F4F3;
+  --surface: #FFFFFF;
+  --ink: #0F1C25;
+  --muted: #566772;
+  --line: #D5DDE0;
+  --cone: #E8621C;          /* training-cone orange: the ball foot */
+  --pitch: #2A73D9;         /* pitch-line blue: the standing foot */
+  --board: #16232B;         /* 3D stage */
+  --flag: #B7791F;
+  --good: #2E7D4F;
+  --bad: #B23B3B;
+  --focus: #2A73D9;
+  --display: "Barlow Condensed", "Arial Narrow", "Helvetica Neue", sans-serif;
+  --body: "Atkinson Hyperlegible", "Segoe UI", Helvetica, Arial, sans-serif;
+  --mono: "IBM Plex Mono", ui-monospace, "SF Mono", Menlo, monospace;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --paper: #0D1418; --surface: #141E24; --ink: #E6EDEF; --muted: #93A4AD; --line: #26343C;
+    --cone: #F2793A; --pitch: #5B9BF0; --board: #10191F;
+    --flag: #D9A441; --good: #5CB98A; --bad: #E07070; --focus: #7FB3FF; color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --paper: #0D1418; --surface: #141E24; --ink: #E6EDEF; --muted: #93A4AD; --line: #26343C;
+  --cone: #F2793A; --pitch: #5B9BF0; --board: #10191F;
+  --flag: #D9A441; --good: #5CB98A; --bad: #E07070; --focus: #7FB3FF; color-scheme: dark;
+}
+*, *::before, *::after { box-sizing: border-box; }
+[hidden] { display: none !important; }
+body { background: var(--paper); color: var(--ink); font: 16px/1.5 var(--body); padding-inline: 16px; padding-block: 0 48px; }
+h1, h2, h3 { font-family: var(--display); text-wrap: balance; margin: 0; letter-spacing: 0.01em; }
+button { font: inherit; color: inherit; }
+:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
+.wrap { max-width: 1280px; margin: 0 auto; }
+
+/* ---------- header ---------- */
+.top { display: grid; gap: 12px; padding-block: 20px 14px; }
+.top-row { display: flex; flex-wrap: wrap; align-items: end; justify-content: space-between; gap: 12px 24px; }
+.brand h1 { font-size: clamp(30px, 5vw, 44px); font-weight: 700; text-transform: uppercase; line-height: 0.95; }
+.brand h1 span { color: var(--cone); }
+.brand p { margin: 6px 0 0; color: var(--muted); font-size: 14px; max-width: 70ch; }
+.steps { display: flex; flex-wrap: wrap; gap: 4px; padding: 4px; border: 1px solid var(--line); border-radius: 10px; background: var(--surface); }
+.steps button { display: flex; align-items: center; gap: 8px; border: 0; background: none; padding: 8px 12px; border-radius: 7px; cursor: pointer; font-family: var(--display); font-size: 17px; font-weight: 600; letter-spacing: 0.02em; color: var(--muted); }
+.steps button b { display: inline-grid; place-items: center; width: 22px; height: 22px; border-radius: 50%; border: 1.5px solid currentColor; font: 600 12px var(--mono); }
+.steps button[aria-pressed="true"] { background: var(--ink); color: var(--paper); }
+.steps button:hover:not([aria-pressed="true"]) { color: var(--ink); }
+.skills { display: flex; gap: 8px; overflow-x: auto; padding-bottom: 2px; scrollbar-width: thin; }
+.skills button { flex: none; display: grid; gap: 1px; text-align: left; min-width: 150px; padding: 8px 12px; border-radius: 10px; border: 1px solid var(--line); background: var(--surface); cursor: pointer; }
+.skills button small { font: 500 11px var(--mono); letter-spacing: 0.05em; text-transform: uppercase; color: var(--muted); }
+.skills button b { font: 700 18px/1.1 var(--display); text-transform: uppercase; letter-spacing: 0.02em; }
+.skills button[aria-pressed="true"] { border-color: var(--cone); box-shadow: inset 0 0 0 1px var(--cone); }
+.skills button[aria-pressed="true"] small { color: var(--cone); }
+
+/* ---------- console ---------- */
+.console { display: grid; grid-template-columns: minmax(0, 1.6fr) minmax(0, 1fr); gap: 20px; align-items: start; }
+@media (max-width: 960px) { .console { grid-template-columns: minmax(0, 1fr); } }
+.stagecol { display: grid; gap: 10px; min-width: 0; }
+.stage { display: grid; grid-template-columns: minmax(0, 0.78fr) minmax(0, 1.22fr); gap: 8px; }
+@media (max-width: 560px) { .stage { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); } }
+.panel { position: relative; border-radius: 12px; overflow: hidden; background: var(--board); }
+.video-wrap { aspect-ratio: 9 / 16; max-width: 100%; }
+.video-wrap video { width: 100%; height: 100%; object-fit: cover; display: block; background: #000; }
+.mirrored .video-wrap video { transform: scaleX(-1); }
+.cue { position: absolute; left: 8px; right: 8px; bottom: 8px; padding: 8px 10px; border-radius: 8px; background: rgba(10, 18, 23, 0.82); color: #F4F7F8; pointer-events: none; }
+.cue small { display: block; font: 500 11px var(--mono); letter-spacing: 0.06em; text-transform: uppercase; color: #FFB27D; }
+.cue strong { display: block; font: 700 clamp(16px, 2.2vw, 22px)/1.1 var(--display); text-transform: uppercase; letter-spacing: 0.02em; }
+.cue span { display: block; font-size: 13px; line-height: 1.35; margin-top: 2px; color: #D5DEE2; }
+.tag-shot { position: absolute; top: 8px; left: 8px; right: 8px; display: flex; flex-wrap: wrap; gap: 4px; pointer-events: none; }
+.tag-shot span { padding: 3px 8px; border-radius: 6px; background: rgba(10, 18, 23, 0.75); color: #E9EEF0; font: 500 11px var(--mono); letter-spacing: 0.06em; text-transform: uppercase; }
+.tag-shot span.low { color: #FFD08A; }
+.three-wrap canvas { display: block; width: 100%; height: 100%; touch-action: none; }
+.three-wrap { min-height: 260px; }
+.loading { position: absolute; inset: 0; display: grid; place-items: center; text-align: center; padding: 16px; color: #C9D4D9; font-size: 14px; background: var(--board); }
+.loading .bar { width: 160px; height: 4px; border-radius: 2px; background: #2A3B45; margin: 10px auto 0; overflow: hidden; }
+.loading .bar i { display: block; height: 100%; width: 0; background: var(--cone); transition: width 0.2s; }
+.views { position: absolute; top: 8px; right: 8px; display: flex; flex-wrap: wrap; justify-content: end; gap: 4px; max-width: calc(100% - 16px); }
+.views button { border: 1px solid #34505F; background: rgba(16, 26, 32, 0.8); color: #D7E1E5; border-radius: 6px; padding: 3px 8px; font: 500 11px var(--mono); cursor: pointer; }
+.views button[aria-pressed="true"] { background: #E9EEF0; color: #10191F; border-color: #E9EEF0; }
+.nobody { position: absolute; left: 8px; right: 8px; bottom: 8px; padding: 6px 9px; border-radius: 7px; background: rgba(10, 18, 23, 0.8); color: #FFD08A; font-size: 12px; pointer-events: none; }
+
+/* HUD under the stage */
+.hud { display: grid; grid-template-columns: auto minmax(0, 1fr) auto; gap: 14px; align-items: center; padding: 10px 12px; border: 1px solid var(--line); border-radius: 12px; background: var(--surface); }
+@media (max-width: 560px) { .hud { grid-template-columns: minmax(0, 1fr); gap: 10px; } }
+.contacts { display: flex; gap: 6px; flex-wrap: wrap; }
+.pill { display: inline-flex; align-items: center; gap: 6px; padding: 4px 9px; border-radius: 999px; border: 1.5px solid var(--line); font: 500 12px var(--mono); color: var(--muted); }
+.pill i { width: 9px; height: 9px; border-radius: 50%; border: 1.5px solid currentColor; }
+.pill.stand.on { color: var(--pitch); border-color: var(--pitch); }
+.pill.ball.on { color: var(--cone); border-color: var(--cone); }
+.pill.on i { background: currentColor; }
+.meter { min-width: 0; }
+.meter .lbl { display: flex; justify-content: space-between; gap: 8px; font: 500 11px var(--mono); color: var(--muted); letter-spacing: 0.03em; }
+.meter .lbl b { font-weight: 500; color: var(--ink); }
+.meter .track { position: relative; height: 10px; margin-top: 4px; border-radius: 5px; background: linear-gradient(90deg, color-mix(in srgb, var(--pitch) 35%, transparent), var(--line) 50%, color-mix(in srgb, var(--cone) 35%, transparent)); }
+.meter .track::after { content: ""; position: absolute; left: 50%; top: -3px; bottom: -3px; width: 1px; background: var(--muted); opacity: 0.5; }
+.meter .knob { position: absolute; top: 50%; width: 16px; height: 16px; margin: -8px 0 0 -8px; border-radius: 50%; background: var(--ink); border: 3px solid var(--surface); box-shadow: 0 0 0 1px var(--line); }
+.readouts { display: flex; flex-wrap: wrap; gap: 6px 14px; font: 500 12px var(--mono); color: var(--muted); }
+.readouts b { color: var(--ink); font-weight: 500; font-variant-numeric: tabular-nums; }
+.focus-ring { border-radius: 8px; box-shadow: 0 0 0 2px color-mix(in srgb, var(--cone) 60%, transparent); }
+
+/* transport + timeline */
+.transport { display: grid; gap: 8px; padding: 10px 12px 12px; border: 1px solid var(--line); border-radius: 12px; background: var(--surface); }
+.controls { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; }
+.btn { display: inline-flex; align-items: center; justify-content: center; gap: 6px; min-height: 34px; padding: 6px 12px; border-radius: 8px; border: 1px solid var(--line); background: var(--surface); cursor: pointer; font-size: 14px; }
+.btn:hover { border-color: var(--muted); }
+.btn:disabled { opacity: 0.45; cursor: default; }
+.btn.primary { background: var(--ink); color: var(--paper); border-color: var(--ink); }
+.btn.cone { background: var(--cone); border-color: var(--cone); color: #fff; }
+.btn[aria-pressed="true"] { background: color-mix(in srgb, var(--ink) 10%, var(--surface)); border-color: var(--ink); }
+.btn.icon { width: 34px; padding: 0; font-family: var(--mono); }
+.time { font: 500 13px var(--mono); font-variant-numeric: tabular-nums; color: var(--muted); margin-left: auto; }
+.seg { display: inline-flex; border: 1px solid var(--line); border-radius: 8px; overflow: hidden; }
+.seg button { border: 0; background: none; padding: 6px 9px; font: 500 12px var(--mono); cursor: pointer; color: var(--muted); }
+.seg button[aria-pressed="true"] { background: var(--ink); color: var(--paper); }
+.chips { display: flex; flex-wrap: wrap; gap: 6px; }
+.chip { display: inline-flex; align-items: center; gap: 6px; padding: 4px 10px; border-radius: 999px; border: 1px solid var(--line); background: none; cursor: pointer; font-size: 13px; color: var(--muted); }
+.chip::before { content: ""; width: 8px; height: 8px; border-radius: 2px; border: 1.5px solid currentColor; }
+.chip[aria-pressed="true"] { color: var(--ink); border-color: var(--ink); }
+.chip[aria-pressed="true"]::before { background: currentColor; }
+.timeline { position: relative; height: 54px; cursor: pointer; user-select: none; touch-action: none; }
+.tl-shots, .tl-phases { position: absolute; left: 0; right: 0; }
+.tl-shots { top: 0; height: 16px; }
+.tl-shot { position: absolute; top: 0; bottom: 0; font: 500 10px/16px var(--mono); letter-spacing: 0.06em; text-transform: uppercase; color: var(--muted); padding-left: 4px; white-space: nowrap; overflow: hidden; border-left: 1px solid var(--line); }
+.tl-phases { top: 18px; height: 22px; }
+.tl-phase { position: absolute; top: 0; bottom: 0; border-radius: 3px; background: color-mix(in srgb, var(--ink) 12%, transparent); border: 1px solid var(--surface); font: 600 11px/20px var(--display); letter-spacing: 0.03em; text-transform: uppercase; color: var(--muted); padding-left: 4px; overflow: hidden; white-space: nowrap; }
+.tl-phase.active { background: var(--cone); color: #fff; }
+.tl-key { position: absolute; top: 40px; width: 2px; height: 8px; margin-left: -1px; background: var(--ink); opacity: 0.55; }
+.tl-head { position: absolute; top: 0; bottom: 0; width: 2px; margin-left: -1px; background: var(--ink); pointer-events: none; }
+.tl-head::after { content: ""; position: absolute; bottom: -4px; left: -4px; width: 10px; height: 10px; border-radius: 50%; background: var(--ink); }
+.tl-loop { position: absolute; top: 16px; height: 26px; border: 1.5px dashed var(--cone); border-radius: 4px; pointer-events: none; }
+
+/* ---------- lesson panel ---------- */
+.lesson { display: grid; gap: 14px; min-width: 0; }
+.card { border: 1px solid var(--line); border-radius: 12px; background: var(--surface); padding: 16px; min-width: 0; }
+.eyebrow { font: 500 11px var(--mono); letter-spacing: 0.08em; text-transform: uppercase; color: var(--muted); }
+.lesson h2 { font-size: 28px; font-weight: 700; text-transform: uppercase; line-height: 1.05; margin-top: 4px; }
+.lesson p { margin: 8px 0 0; }
+.muted { color: var(--muted); }
+.notice-list { list-style: none; padding: 0; margin: 12px 0 0; display: grid; gap: 8px; }
+.notice-list button { width: 100%; text-align: left; display: grid; grid-template-columns: 58px minmax(0, 1fr); gap: 10px; align-items: start; padding: 9px 10px; border-radius: 9px; border: 1px solid var(--line); background: none; cursor: pointer; }
+.notice-list button:hover, .notice-list button.active { border-color: var(--ink); }
+.ts { font: 500 12px var(--mono); color: var(--cone); padding-top: 2px; font-variant-numeric: tabular-nums; }
+.row { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 12px; }
+.unsure { margin: 8px 0 0; padding-left: 18px; display: grid; gap: 4px; font-size: 14px; }
+
+.phases { list-style: none; padding: 0; margin: 0; display: grid; gap: 8px; }
+.phase { border: 1px solid var(--line); border-radius: 12px; background: var(--surface); }
+.phase > button { width: 100%; display: grid; grid-template-columns: 30px minmax(0, 1fr) auto; gap: 10px; align-items: center; padding: 10px 12px; border: 0; background: none; cursor: pointer; text-align: left; }
+.phase .num, .drill .num { display: grid; place-items: center; width: 28px; height: 28px; border-radius: 50%; border: 1.5px solid var(--line); font: 600 13px var(--mono); }
+.phase .name { font: 700 19px/1.1 var(--display); text-transform: uppercase; letter-spacing: 0.02em; }
+.phase .when { font: 500 12px var(--mono); color: var(--muted); }
+.phase.live .num { background: var(--cone); border-color: var(--cone); color: #fff; }
+.phase.open { border-color: var(--ink); }
+.detail { padding: 0 14px 14px 52px; display: grid; gap: 10px; }
+@media (max-width: 480px) { .detail { padding-left: 14px; } }
+.cueline { font: 700 20px/1.15 var(--display); text-transform: uppercase; color: var(--cone); letter-spacing: 0.01em; }
+.facts { display: grid; gap: 6px; margin: 0; }
+.facts div { display: grid; grid-template-columns: 96px minmax(0, 1fr); gap: 10px; font-size: 14px; }
+.facts dt { font: 500 11px/20px var(--mono); letter-spacing: 0.05em; text-transform: uppercase; color: var(--muted); }
+.facts dd { margin: 0; }
+.conf { display: inline-flex; gap: 6px; align-items: center; font: 500 11px var(--mono); letter-spacing: 0.04em; text-transform: uppercase; padding: 3px 8px; border-radius: 6px; }
+.conf.high { color: var(--good); background: color-mix(in srgb, var(--good) 12%, transparent); }
+.conf.medium { color: var(--flag); background: color-mix(in srgb, var(--flag) 14%, transparent); }
+.conf.low { color: var(--bad); background: color-mix(in srgb, var(--bad) 12%, transparent); }
+
+.drills { list-style: none; padding: 0; margin: 0; display: grid; gap: 10px; }
+.drill { border: 1px solid var(--line); border-radius: 12px; background: var(--surface); padding: 14px; display: grid; gap: 10px; }
+.drill header { display: grid; grid-template-columns: 30px minmax(0, 1fr) auto; gap: 10px; align-items: start; }
+.drill h3 { font-size: 20px; text-transform: uppercase; line-height: 1.1; }
+.drill .lvl { font: 500 11px var(--mono); color: var(--muted); letter-spacing: 0.05em; text-transform: uppercase; }
+.drill.done { border-color: var(--good); }
+.drill.done .num { background: var(--good); border-color: var(--good); color: #fff; }
+.checks { display: grid; gap: 6px; }
+.checks label { display: grid; grid-template-columns: 20px minmax(0, 1fr); gap: 8px; align-items: start; font-size: 14px; cursor: pointer; }
+.checks input { width: 18px; height: 18px; margin: 2px 0 0; accent-color: var(--good); }
+.reps { display: flex; align-items: center; gap: 8px; font: 500 13px var(--mono); flex-wrap: wrap; }
+.reps .dots { display: flex; gap: 3px; flex-wrap: wrap; }
+.reps .dots i { width: 9px; height: 9px; border-radius: 50%; border: 1.5px solid var(--muted); }
+.reps .dots i.on { background: var(--good); border-color: var(--good); }
+
+.quiz { display: grid; gap: 10px; }
+.options { display: grid; gap: 6px; }
+.options button { text-align: left; padding: 10px 12px; border-radius: 9px; border: 1px solid var(--line); background: none; cursor: pointer; }
+.options button:hover:not(:disabled) { border-color: var(--ink); }
+.options button.right { border-color: var(--good); background: color-mix(in srgb, var(--good) 12%, transparent); }
+.options button.wrong { border-color: var(--bad); background: color-mix(in srgb, var(--bad) 10%, transparent); }
+.feedback { padding: 10px 12px; border-radius: 9px; background: color-mix(in srgb, var(--ink) 6%, transparent); font-size: 14px; }
+.feedback.good { background: color-mix(in srgb, var(--good) 12%, transparent); }
+.feedback.miss { background: color-mix(in srgb, var(--flag) 14%, transparent); }
+.order { display: flex; flex-wrap: wrap; gap: 6px; }
+.order button { padding: 6px 10px; border-radius: 999px; border: 1px solid var(--line); background: none; cursor: pointer; font-size: 14px; }
+.order button:disabled { opacity: 0.4; cursor: default; }
+.picked { display: flex; flex-wrap: wrap; gap: 6px; min-height: 34px; padding: 6px; border-radius: 9px; border: 1px dashed var(--line); }
+.picked span { padding: 4px 9px; border-radius: 999px; background: var(--ink); color: var(--paper); font-size: 13px; }
+.picked span.bad { background: var(--bad); color: #fff; }
+.score { font: 700 40px/1 var(--display); }
+
+/* ---------- notes ---------- */
+.notes { margin-top: 36px; border-top: 1px solid var(--line); padding-top: 24px; display: grid; gap: 22px; }
+.notes > *, .cols > * { min-width: 0; }
+.notes h2 { font-size: 30px; text-transform: uppercase; }
+.notes h3 { font-size: 20px; text-transform: uppercase; margin-bottom: 6px; }
+.notes p, .notes li { max-width: 72ch; }
+.compare { overflow-x: auto; }
+.compare table { width: 100%; min-width: 640px; border-collapse: collapse; font-size: 14px; }
+.compare th, .compare td { text-align: left; vertical-align: top; padding: 10px 12px; border-bottom: 1px solid var(--line); }
+.compare th { font: 500 11px var(--mono); letter-spacing: 0.06em; text-transform: uppercase; color: var(--muted); }
+.compare tr.chosen td:first-child { box-shadow: inset 3px 0 0 var(--cone); }
+.cols { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 320px), 1fr)); gap: 22px; }
+.notes ul { padding-left: 18px; margin: 6px 0 0; display: grid; gap: 6px; }
+.siblings { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 8px; }
+.siblings a { padding: 6px 12px; border-radius: 999px; border: 1px solid var(--line); color: var(--ink); text-decoration: none; font-size: 14px; }
+.siblings a[aria-current="page"] { border-color: var(--cone); color: var(--cone); }
+
+@media (prefers-reduced-motion: reduce) { * { transition: none !important; animation: none !important; } }
+</style>
+
+<div class="wrap">
+  <header class="top">
+    <div class="top-row">
+      <div class="brand">
+        <h1 id="title">Skill lesson</h1>
+        <p id="subtitle">Loading the lesson…</p>
+      </div>
+      <nav class="steps" aria-label="Lesson stages">
+        <button type="button" data-mode="watch" aria-pressed="true"><b>1</b>Watch</button>
+        <button type="button" data-mode="breakdown" aria-pressed="false"><b>2</b>Break it down</button>
+        <button type="button" data-mode="practise" aria-pressed="false"><b>3</b>Practise</button>
+        <button type="button" data-mode="test" aria-pressed="false"><b>4</b>Test yourself</button>
+      </nav>
+    </div>
+    <div class="skills" id="skills" role="group" aria-label="Skills in this video"></div>
+  </header>
+
+  <main class="console" id="console">
+    <div class="stagecol">
+      <div class="stage">
+        <div class="panel video-wrap">
+          <video id="video" muted playsinline preload="auto"></video>
+          <div class="tag-shot" id="shotTag"></div>
+          <div class="cue" id="cue" aria-live="polite"><small id="cueWhen"></small><strong id="cueName"></strong><span id="cueText"></span></div>
+        </div>
+        <div class="panel three-wrap" id="threeWrap">
+          <canvas id="canvas" aria-label="3D body motion. Drag to orbit, pinch or scroll to zoom."></canvas>
+          <div class="views" role="group" aria-label="3D camera">
+            <button type="button" data-view="video" aria-pressed="true">Video angle</button>
+            <button type="button" data-view="side" aria-pressed="false">Side</button>
+            <button type="button" data-view="behind" aria-pressed="false">Behind</button>
+            <button type="button" data-view="top" aria-pressed="false">Top</button>
+          </div>
+          <div class="nobody" id="nobody" hidden>No reliable 3D for this moment</div>
+          <div class="loading" id="loading"><div><span id="loadingText">Loading the 3D motion…</span><div class="bar"><i id="loadingBar"></i></div></div></div>
+        </div>
+      </div>
+
+      <div class="hud" aria-label="Measured from the 3D motion">
+        <div class="contacts">
+          <span class="pill stand" id="pillStand"><i></i>Standing foot</span>
+          <span class="pill ball" id="pillBall"><i></i>Ball foot</span>
+        </div>
+        <div class="meter" id="meter">
+          <div class="lbl"><span>◀ <b>Standing foot</b></span><span>Weight · est.</span><span><b>Ball foot</b> ▶</span></div>
+          <div class="track"><span class="knob" id="knob" style="left:50%"></span></div>
+        </div>
+        <div class="readouts">
+          <span id="roDrop">Body <b>–</b></span>
+          <span id="roTurn">Turn <b>–</b></span>
+          <span id="roBall">Ball <b>–</b></span>
+        </div>
+      </div>
+
+      <div class="transport">
+        <div class="controls">
+          <button type="button" class="btn primary" id="play" aria-label="Play">▶ Play</button>
+          <button type="button" class="btn icon" id="back" aria-label="Back one frame">‹</button>
+          <button type="button" class="btn icon" id="fwd" aria-label="Forward one frame">›</button>
+          <div class="seg" role="group" aria-label="Speed">
+            <button type="button" data-rate="0.25" aria-pressed="false">¼×</button>
+            <button type="button" data-rate="0.5" aria-pressed="false">½×</button>
+            <button type="button" data-rate="1" aria-pressed="true">1×</button>
+          </div>
+          <button type="button" class="btn" id="loopBtn" aria-pressed="false">Loop</button>
+          <button type="button" class="btn" id="mirrorBtn" aria-pressed="false" title="Flip video and 3D to learn it on your other foot">Mirror</button>
+          <span class="time" id="time">0.00 s</span>
+        </div>
+        <div class="timeline" id="timeline" role="slider" tabindex="0" aria-label="Time in clip" aria-valuemin="0" aria-valuemax="1" aria-valuenow="0">
+          <div class="tl-shots" id="tlShots"></div>
+          <div class="tl-phases" id="tlPhases"></div>
+          <div id="tlKeys"></div>
+          <div class="tl-loop" id="tlLoop" hidden></div>
+          <div class="tl-head" id="tlHead"></div>
+        </div>
+        <div class="chips" role="group" aria-label="3D overlays">
+          <button type="button" class="chip" data-ov="prints" aria-pressed="true">Footprints</button>
+          <button type="button" class="chip" data-ov="paths" aria-pressed="true">Paths</button>
+          <button type="button" class="chip" data-ov="ghost" aria-pressed="false">Ghost of last step</button>
+          <button type="button" class="chip" data-ov="arrow" aria-pressed="true">Direction</button>
+          <button type="button" class="chip" data-ov="follow" aria-pressed="true">Follow</button>
+        </div>
+      </div>
+    </div>
+
+    <section class="lesson" id="lesson" aria-live="polite"></section>
+  </main>
+
+  <section class="notes" id="notes"></section>
+</div>
+
+<script type="importmap">
+{ "imports": {
+  "three": "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js",
+  "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/"
+} }
+</script>
+<script type="module">
+import * as THREE from 'three';
+import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+
+const $ = (s, el = document) => el.querySelector(s);
+const $$ = (s, el = document) => [...el.querySelectorAll(s)];
+const clamp = (v, a, b) => Math.min(b, Math.max(a, v));
+const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+function safeURL(value) {
+  const text = String(value ?? '').trim();
+  if (!text || /[\u0000-\u0020\\]/.test(text) || text.startsWith('//')) return '#';
+  try {
+    const url = new URL(text, 'https://lesson.invalid/');
+    return ['https:', 'http:'].includes(url.protocol) ? text : '#';
+  } catch { return '#'; }
+}
+let storeKey = 'lesson';
+const store = {
+  get(k, d) { try { const v = localStorage.getItem(storeKey + '.' + k); return v == null ? d : JSON.parse(v); } catch { return d; } },
+  set(k, v) { try { localStorage.setItem(storeKey + '.' + k, JSON.stringify(v)); } catch { /* storage unavailable */ } },
+};
+
+/* ---------------- data ---------------- */
+let LESSON;      // lesson.json: skills, phases, drills, challenges (authored)
+let A;           // analysis.json: per-frame measurements from the 3D motion
+let F;           // A.frames
+let fps = 30;
+let skill;       // current skill
+let phaseList = [];
+const video = $('#video');
+const state = {
+  mode: 'watch', loop: null, mirror: false, view: 'video',
+  ov: { prints: true, paths: true, ghost: false, arrow: true, follow: true },
+};
+
+const frameAt = (t) => clamp(Math.round(t * fps), 0, A.frameCount - 1);
+const shotIndex = (i) => { const k = A.shots.findIndex((s) => i >= s.start && i < s.end); return k < 0 ? 0 : k; };
+const other = (side) => (side === 'left' ? 'right' : 'left');
+/** Measured series by the foot's job in the current skill. */
+const roleSide = (role) => (role === 'ball' ? skill.ballFoot : other(skill.ballFoot));
+const planted = (role, i) => !!F[roleSide(role) + 'Planted'][i];
+const footPos = (role, i) => F[roleSide(role)][i];
+/** Ball position; a skill whose ball never leaves the ground keeps it on the turf. */
+const ballAt = (i) => { const b = F.ball[i]; return b && skill.ballLeavesGround === false && F.ballAir[i] ? [b[0], A.ballDiameter / 2, b[2]] : b; };
+const ballInAir = (i) => !!F.ballAir[i] && skill.ballLeavesGround !== false;
+/** 0 = weight over the standing foot, 1 = over the ball foot. */
+const weightToBall = (i) => (skill.ballFoot === 'right' ? F.weight[i] : 1 - F.weight[i]);
+
+/* ---------------- 3D ---------------- */
+const canvas = $('#canvas');
+const renderer = new THREE.WebGLRenderer({ canvas, antialias: true });
+renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
+const scene = new THREE.Scene();
+scene.background = new THREE.Color(getComputedStyle(document.documentElement).getPropertyValue('--board').trim() || '#16232B');
+const camera = new THREE.PerspectiveCamera(34, 1, 0.05, 100);
+const controls = new OrbitControls(camera, canvas);
+controls.enableDamping = true;
+controls.dampingFactor = 0.12;
+controls.minDistance = 1.0;
+controls.maxDistance = 14;
+scene.add(new THREE.HemisphereLight(0xffffff, 0x2b3a44, 1.5));
+const keyLight = new THREE.DirectionalLight(0xffffff, 2.0);
+keyLight.position.set(2.5, 5, 4);
+scene.add(keyLight);
+const root = new THREE.Group();
+scene.add(root);
+
+const COLORS = { body: new THREE.Color('#D8DFE3'), ball: new THREE.Color('#E8621C'), stand: new THREE.Color('#2A73D9') };
+let motion = null;      // { meta, mesh, get(i) }
+let body, ghost, ball, grid, comTrail, standTrail, ballFootTrail, ballTrail, arrow;
+let colorSets = null;   // { meshLeftIsBall: Float32Array, meshRightIsBall: Float32Array }
+let currentColors = null;
+const prints = [];
+
+function lineObj(color, opacity, max) {
+  const g = new THREE.BufferGeometry();
+  g.setAttribute('position', new THREE.BufferAttribute(new Float32Array(max * 3), 3).setUsage(THREE.DynamicDrawUsage));
+  g.setDrawRange(0, 0);
+  const l = new THREE.Line(g, new THREE.LineBasicMaterial({ color, transparent: true, opacity }));
+  l.frustumCulled = false;
+  root.add(l);
+  return l;
+}
+
+function buildColors() {
+  const V = motion.mesh.vertexCount;
+  const make = (ballSet, standSet) => {
+    const c = new Float32Array(V * 3);
+    for (let i = 0; i < V; i++) COLORS.body.toArray(c, i * 3);
+    for (const i of standSet) COLORS.stand.toArray(c, i * 3);
+    for (const i of ballSet) COLORS.ball.toArray(c, i * 3);
+    return c;
+  };
+  const fs = motion.mesh.footSets;
+  colorSets = { left: make(fs.left, fs.right), right: make(fs.right, fs.left) };
+  currentColors = null;
+}
+
+function build3D() {
+  const V = motion.mesh.vertexCount;
+  const index = new THREE.BufferAttribute(motion.mesh.index, 1);
+  const g = new THREE.BufferGeometry();
+  g.setAttribute('position', new THREE.BufferAttribute(new Float32Array(V * 3), 3).setUsage(THREE.DynamicDrawUsage));
+  g.setAttribute('color', new THREE.BufferAttribute(new Float32Array(V * 3), 3).setUsage(THREE.DynamicDrawUsage));
+  g.setIndex(index);
+  body = new THREE.Mesh(g, new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.7, metalness: 0.02, side: THREE.DoubleSide }));
+  body.frustumCulled = false;
+  root.add(body);
+  const gg = new THREE.BufferGeometry();
+  gg.setAttribute('position', new THREE.BufferAttribute(new Float32Array(V * 3), 3).setUsage(THREE.DynamicDrawUsage));
+  gg.setIndex(index);
+  ghost = new THREE.Mesh(gg, new THREE.MeshBasicMaterial({ color: 0x9cc7ff, transparent: true, opacity: 0.2, depthWrite: false, side: THREE.DoubleSide }));
+  ghost.frustumCulled = false;
+  ghost.visible = false;
+  root.add(ghost);
+  ball = new THREE.Mesh(new THREE.SphereGeometry(A.ballDiameter / 2, 28, 18), new THREE.MeshStandardMaterial({ color: 0xf6f6f2, roughness: 0.55, emissive: 0x222222 }));
+  root.add(ball);
+  grid = new THREE.GridHelper(14, 56, 0x6f8794, 0x3a4f5b);
+  grid.material.transparent = true;
+  grid.material.opacity = 0.55;
+  root.add(grid);
+  const N = A.frameCount;
+  comTrail = lineObj(0xffffff, 0.75, N);
+  standTrail = lineObj(0x6aa8ff, 0.95, N);
+  ballFootTrail = lineObj(0xff8a4c, 0.95, N);
+  ballTrail = lineObj(0xf6f6f2, 0.35, N);
+  arrow = new THREE.ArrowHelper(new THREE.Vector3(1, 0, 0), new THREE.Vector3(), 1, 0xffd166, 0.18, 0.12);
+  arrow.visible = false;
+  root.add(arrow);
+  buildColors();
+  buildPrints();
+}
+
+/** Footprints: one per planted run, where the foot came down, coloured by its job in this skill. */
+function buildPrints() {
+  for (const m of prints) root.remove(m);
+  prints.length = 0;
+  if (!skill || !body) return;
+  const disc = new THREE.CircleGeometry(0.07, 28).rotateX(-Math.PI / 2);
+  for (const p of A.events.plants) {
+    const role = p.foot === skill.ballFoot ? 'ball' : 'stand';
+    const pos = F[p.foot][p.start];
+    const m = new THREE.Mesh(disc, new THREE.MeshBasicMaterial({ color: role === 'ball' ? COLORS.ball : COLORS.stand, transparent: true, opacity: 0.85, depthWrite: false }));
+    m.position.set(pos[0], 0.004, pos[2]);
+    m.scale.set(1, 1, 1.6);
+    m.userData = { start: p.start, end: p.end, shot: shotIndex(p.start) };
+    prints.push(m);
+    root.add(m);
+  }
+}
+
+/** Writes the pose at time t (blended between frames of one shot) into a position array. */
+function writePose(arr, t) {
+  const V = motion.mesh.vertexCount;
+  const f = clamp(t * fps, 0, A.frameCount - 1);
+  const i = Math.floor(f), j = Math.min(i + 1, A.frameCount - 1);
+  let a = f - i;
+  if (shotIndex(i) !== shotIndex(j)) a = 0;
+  const qa = motion.get(i), qb = a > 0 ? motion.get(j) : null;
+  if (!qa) return false;
+  const lo = motion.meta.min, st = motion.step;
+  const A0 = qa.values, oa = qa.offset;
+  if (qb) {
+    const B = qb.values, ob = qb.offset;
+    for (let k = 0; k < V * 3; k += 3) {
+      arr[k] = lo[0] + (A0[oa + k] + (B[ob + k] - A0[oa + k]) * a) * st[0];
+      arr[k + 1] = lo[1] + (A0[oa + k + 1] + (B[ob + k + 1] - A0[oa + k + 1]) * a) * st[1];
+      arr[k + 2] = lo[2] + (A0[oa + k + 2] + (B[ob + k + 2] - A0[oa + k + 2]) * a) * st[2];
+    }
+  } else {
+    for (let k = 0; k < V * 3; k += 3) {
+      arr[k] = lo[0] + A0[oa + k] * st[0];
+      arr[k + 1] = lo[1] + A0[oa + k + 1] * st[1];
+      arr[k + 2] = lo[2] + A0[oa + k + 2] * st[2];
+    }
+  }
+  return true;
+}
+
+const target = new THREE.Vector3(0, 0.8, 0);
+let lastPoseT = -1, lastGhostT = -1;
+function comWorld(i) {
+  const c = F.com[i];
+  return new THREE.Vector3(state.mirror ? -c[0] : c[0], 0.85, c[2]);
+}
+/** Camera offset for a view, relative to the body: the filming camera's own direction, or turned from it. */
+function viewOffset(v, i) {
+  const s = A.shots[shotIndex(i)];
+  const c = F.com[i];
+  const cam = s.camera || [c[0], 1.4, c[2] + 4];
+  let dx = cam[0] - c[0], dz = cam[2] - c[2];
+  const dist = clamp(Math.hypot(dx, dz), 2.6, 5.5);
+  const n = Math.hypot(dx, dz) || 1;
+  dx /= n; dz /= n;
+  if (state.mirror) dx = -dx;
+  const h = clamp(cam[1] - 0.85, -0.3, 2.2);
+  if (v === 'video') return [dx * dist, h, dz * dist];
+  if (v === 'side') return [-dz * 3.6, 0.35, dx * 3.6];
+  if (v === 'behind') return [-dx * 3.6, 0.6, -dz * 3.6];
+  return [dx * 0.02, 4.6, dz * 0.02];
+}
+function setView(v) {
+  state.view = v;
+  $$('.views button').forEach((b) => b.setAttribute('aria-pressed', String(b.dataset.view === v)));
+  if (!A) return;
+  const i = frameAt(video.currentTime);
+  const c = comWorld(i);
+  const off = viewOffset(v, i);
+  target.copy(c);
+  controls.target.copy(c);
+  camera.position.set(c.x + off[0], c.y + off[1], c.z + off[2]);
+  controls.update();
+}
+function resize() {
+  const w = canvas.clientWidth, h = canvas.clientHeight;
+  if (!w || !h) return;
+  renderer.setSize(w, h, false);
+  camera.aspect = w / h;
+  camera.updateProjectionMatrix();
+}
+new ResizeObserver(resize).observe($('#threeWrap'));
+
+function setTrail(line, from, to, pick) {
+  const arr = line.geometry.attributes.position.array;
+  let n = 0;
+  for (let i = from; i <= to; i++) {
+    const p = pick(i);
+    if (!p) continue;
+    arr[n * 3] = p[0]; arr[n * 3 + 1] = p[1]; arr[n * 3 + 2] = p[2];
+    n++;
+  }
+  line.geometry.setDrawRange(0, n);
+  line.geometry.attributes.position.needsUpdate = true;
+}
+
+let lastShot = -1;
+function render3D(t) {
+  if (!motion || !body) return;
+  const i = frameAt(t);
+  const shot = shotIndex(i);
+  if (shot !== lastShot) { lastShot = shot; setView(state.view); }
+  if (t !== lastPoseT && writePose(body.geometry.attributes.position.array, t)) {
+    body.geometry.attributes.position.needsUpdate = true;
+    body.geometry.computeVertexNormals();
+    lastPoseT = t;
+  }
+  // Colour the feet by their job; a corrected leg swap moves the colours with the real feet.
+  const meshBall = F.legSwap[i] ? other(skill.ballFoot) : skill.ballFoot;
+  if (currentColors !== meshBall) {
+    body.geometry.attributes.color.array.set(colorSets[meshBall]);
+    body.geometry.attributes.color.needsUpdate = true;
+    currentColors = meshBall;
+  }
+  const valid = !!F.valid[i];
+  body.visible = valid;
+  $('#nobody').hidden = valid;
+  // Ghost: the previous phase's key pose in the same shot.
+  const ph = phaseAt(t);
+  let gT = null;
+  if (state.ov.ghost && ph) {
+    const prev = phaseList.filter((p) => shotIndex(frameAt(p.key)) === shot && p.key < ph.start).pop();
+    gT = prev ? prev.key : null;
+  }
+  ghost.visible = gT != null;
+  if (gT != null && gT !== lastGhostT && writePose(ghost.geometry.attributes.position.array, gT)) {
+    ghost.geometry.attributes.position.needsUpdate = true;
+    lastGhostT = gT;
+  }
+  const bp = ballAt(i);
+  ball.visible = !!bp;
+  if (bp) ball.position.set(bp[0], bp[1], bp[2]);
+  const c = F.com[i];
+  grid.position.set(c[0], 0, c[2]);
+
+  const shotStart = A.shots[shot].start;
+  const start = Math.max(shotStart, ph ? frameAt(ph.start) : i);
+  const showPaths = state.ov.paths;
+  comTrail.visible = standTrail.visible = ballFootTrail.visible = ballTrail.visible = showPaths;
+  if (showPaths) {
+    const from = Math.max(start, i - Math.round(1.5 * fps));
+    setTrail(comTrail, from, i, (k) => [F.com[k][0], 0.01, F.com[k][2]]);
+    setTrail(standTrail, from, i, (k) => footPos('stand', k));
+    setTrail(ballFootTrail, from, i, (k) => footPos('ball', k));
+    setTrail(ballTrail, from, i, (k) => ballAt(k));
+  }
+  for (const m of prints) {
+    const d = m.userData;
+    m.visible = state.ov.prints && d.shot === shot && d.start <= i && d.start >= frameAt(skill.range[0]) - 1;
+    if (m.visible) m.material.opacity = d.end >= i ? 0.9 : 0.35;
+  }
+  const w = Math.round(0.1 * fps);
+  const a0 = Math.max(i - w, shotStart), a1 = Math.min(i + w, A.shots[shot].end - 1);
+  const c0 = F.com[a0], c1 = F.com[a1];
+  const dx = c1[0] - c0[0], dz = c1[2] - c0[2];
+  const speed = Math.hypot(dx, dz) / Math.max((a1 - a0) / fps, 1e-3);
+  arrow.visible = state.ov.arrow && speed > 0.35 && speed < 8 && valid;
+  if (arrow.visible) {
+    arrow.position.set(c[0], 0.03, c[2]);
+    arrow.setDirection(new THREE.Vector3(dx, 0, dz).normalize());
+    arrow.setLength(clamp(speed * 0.35, 0.3, 1.3), 0.18, 0.12);
+  }
+  if (state.ov.follow) {
+    const cw = comWorld(i);
+    const delta = cw.clone().sub(target).multiplyScalar(0.12);
+    target.add(delta);
+    controls.target.add(delta);
+    camera.position.add(delta);
+  }
+  controls.update();
+  renderer.render(scene, camera);
+}
+
+/* ---------------- loading ---------------- */
+async function fetchOk(name) {
+  const r = await fetch('data/' + name);
+  if (!r.ok) throw new Error(`${name} (${r.status})`);
+  return r;
+}
+/** Binary data ships as base64 text, a type the artifact host serves. */
+function b64(text) {
+  const bin = atob(text.replace(/\s+/g, ''));
+  const out = new Uint8Array(bin.length);
+  for (let i = 0; i < bin.length; i++) out[i] = bin.charCodeAt(i);
+  return out;
+}
+async function gunzip(bytes) {
+  if (bytes[0] !== 0x1f || bytes[1] !== 0x8b) return bytes.buffer;
+  const stream = new Blob([bytes]).stream().pipeThrough(new DecompressionStream('gzip'));
+  return new Response(stream).arrayBuffer();
+}
+async function loadMotion() {
+  const bar = $('#loadingBar'), label = $('#loadingText');
+  try {
+    if (typeof DecompressionStream === 'undefined') throw new Error('this browser can’t unpack the motion data. Use a current Chrome, Edge, Firefox or Safari');
+    const [meta, mesh] = await Promise.all([fetchOk('motion.json').then((r) => r.json()), fetchOk('mesh.json').then((r) => r.json())]);
+    const faces = b64(mesh.faces);
+    const chunks = new Map();
+    motion = {
+      meta, step: meta.span.map((s) => s / 65535),
+      mesh: { vertexCount: mesh.vertexCount, index: new Uint16Array(faces.buffer), footSets: mesh.footSets },
+      get(f) {
+        const c = meta.chunks.find((ch) => f >= ch.start && f < ch.start + ch.count);
+        const values = c && chunks.get(c.start);
+        return values ? { values, offset: (f - c.start) * mesh.vertexCount * 3 } : null;
+      },
+    };
+    const total = meta.chunks.reduce((s, c) => s + c.bytes, 0);
+    let done = 0;
+    // Chunks covering the current skill first, so its body appears quickly.
+    const first = frameAt(skill.range[0]);
+    const order = [...meta.chunks].sort((a, b) => (a.start + a.count <= first ? 1 : 0) - (b.start + b.count <= first ? 1 : 0) || a.start - b.start);
+    const load = async (c) => {
+      const text = await (await fetchOk(c.file)).text();
+      chunks.set(c.start, new Uint16Array(await gunzip(b64(text))));
+      done += c.bytes;
+      bar.style.width = `${Math.round((done / total) * 100)}%`;
+      label.textContent = `Loading the 3D motion · ${Math.round((done / total) * 100)}%`;
+      if (!body) { build3D(); setView(state.view); }
+      $('#loading').hidden = true;
+      lastPoseT = -1;
+    };
+    await load(order.shift());
+    while (order.length) await Promise.all(order.splice(0, 3).map(load));
+  } catch (e) {
+    $('#loading').hidden = false;
+    label.textContent = `The 3D motion couldn’t load: ${e.message}. The video and lesson still work.`;
+    bar.parentElement.hidden = true;
+  }
+}
+
+/* ---------------- playback ---------------- */
+function phaseAt(t) {
+  return phaseList.find((p) => t >= p.start && t < p.end) || null;
+}
+function setRate(r) {
+  video.playbackRate = r;
+  $$('.seg button').forEach((b) => b.setAttribute('aria-pressed', String(Number(b.dataset.rate) === r)));
+}
+const pct = (t) => `${clamp((t - skill.range[0]) / (skill.range[1] - skill.range[0]), 0, 1) * 100}%`;
+function setLoop(range) {
+  state.loop = range;
+  $('#loopBtn').setAttribute('aria-pressed', String(!!range));
+  const el = $('#tlLoop');
+  el.hidden = !range;
+  if (range) {
+    el.style.left = pct(range.start);
+    el.style.width = `calc(${pct(range.end)} - ${pct(range.start)})`;
+  }
+}
+/** Browsers ignore seeks before the video's metadata arrives, so wait for it. */
+function whenReady(fn) {
+  if (video.readyState >= 1) fn(); else video.addEventListener('loadedmetadata', fn, { once: true });
+}
+function seek(t, { play = false, rate } = {}) {
+  if (rate) setRate(rate);
+  whenReady(() => {
+    video.currentTime = clamp(t, 0, A.duration - 0.02);
+    if (play) video.play().catch(() => {}); else video.pause();
+  });
+}
+function playRange(start, end, rate) {
+  setLoop({ start, end });
+  seek(start, { play: true, rate });
+}
+function togglePlay() {
+  if (video.paused) {
+    if (video.currentTime < skill.range[0] - 0.05 || video.currentTime >= skill.range[1] - 0.05) seek(skill.range[0], { play: true });
+    else video.play().catch(() => {});
+  } else video.pause();
+}
+video.addEventListener('play', () => { $('#play').textContent = '❚❚ Pause'; $('#play').setAttribute('aria-label', 'Pause'); });
+video.addEventListener('pause', () => { $('#play').textContent = '▶ Play'; $('#play').setAttribute('aria-label', 'Play'); });
+video.addEventListener('ended', () => { if (state.loop) seek(state.loop.start, { play: true }); });
+$('#play').addEventListener('click', togglePlay);
+$('#back').addEventListener('click', () => seek(video.currentTime - 1 / fps));
+$('#fwd').addEventListener('click', () => seek(video.currentTime + 1 / fps));
+$$('.seg button').forEach((b) => b.addEventListener('click', () => setRate(Number(b.dataset.rate))));
+$('#loopBtn').addEventListener('click', () => {
+  if (state.loop) { setLoop(null); return; }
+  const p = phaseAt(video.currentTime);
+  setLoop(p ? { start: p.start, end: p.end } : { start: skill.range[0], end: skill.range[1] });
+});
+$('#mirrorBtn').addEventListener('click', () => setMirror(!state.mirror));
+$$('.views button').forEach((b) => b.addEventListener('click', () => setView(b.dataset.view)));
+$$('.chip').forEach((b) => b.addEventListener('click', () => {
+  const k = b.dataset.ov;
+  state.ov[k] = !state.ov[k];
+  b.setAttribute('aria-pressed', String(state.ov[k]));
+  lastGhostT = -1;
+}));
+function setOverlays(ov) {
+  Object.assign(state.ov, ov);
+  $$('.chip').forEach((b) => b.setAttribute('aria-pressed', String(!!state.ov[b.dataset.ov])));
+  lastGhostT = -1;
+}
+document.addEventListener('keydown', (e) => {
+  if (e.target.closest('input, textarea')) return;
+  if (e.key === ' ' && !e.target.closest('button')) { e.preventDefault(); togglePlay(); }
+  if (e.key === 'ArrowLeft' && e.target.closest('#timeline, body')) { e.preventDefault(); seek(video.currentTime - 1 / fps); }
+  if (e.key === 'ArrowRight' && e.target.closest('#timeline, body')) { e.preventDefault(); seek(video.currentTime + 1 / fps); }
+});
+function setMirror(on) {
+  state.mirror = on;
+  root.scale.x = on ? -1 : 1;
+  $('#console').classList.toggle('mirrored', on);
+  $('#mirrorBtn').setAttribute('aria-pressed', String(on));
+  setView(state.view);
+}
+
+/* ---------------- timeline ---------------- */
+function buildTimeline() {
+  const [a, b] = skill.range;
+  const shots = (LESSON.shots || []).filter((s) => s.end > a && s.start < b);
+  $('#tlShots').innerHTML = shots.map((s) => {
+    const s0 = Math.max(s.start, a), s1 = Math.min(s.end, b);
+    return `<div class="tl-shot" style="left:${pct(s0)};width:calc(${pct(s1)} - ${pct(s0)})">${esc(s.label)}</div>`;
+  }).join('');
+  $('#tlPhases').innerHTML = phaseList.map((p) =>
+    `<div class="tl-phase" data-id="${esc(p.id)}" style="left:${pct(p.start)};width:calc(${pct(p.end)} - ${pct(p.start)})" title="${esc(p.name)}">${esc(p.name)}</div>`).join('');
+  $('#tlKeys').innerHTML = phaseList.map((p) => `<div class="tl-key" style="left:${pct(p.key)}"></div>`).join('');
+  $('#timeline').setAttribute('aria-valuemin', a.toFixed(2));
+  $('#timeline').setAttribute('aria-valuemax', b.toFixed(2));
+}
+{
+  const tl = $('#timeline');
+  const seekFromEvent = (e) => {
+    const r = tl.getBoundingClientRect();
+    seek(skill.range[0] + clamp((e.clientX - r.left) / r.width, 0, 1) * (skill.range[1] - skill.range[0]));
+  };
+  let dragging = false;
+  tl.addEventListener('pointerdown', (e) => { dragging = true; tl.setPointerCapture(e.pointerId); seekFromEvent(e); });
+  tl.addEventListener('pointermove', (e) => { if (dragging) seekFromEvent(e); });
+  tl.addEventListener('pointerup', () => { dragging = false; });
+}
+
+/* ---------------- per-frame HUD ---------------- */
+let lastPhaseId = null, lastShotTag = -1;
+function updateHUD(t) {
+  const i = frameAt(t);
+  $('#pillStand').classList.toggle('on', planted('stand', i));
+  $('#pillBall').classList.toggle('on', planted('ball', i));
+  const w = clamp(weightToBall(i), 0, 1);
+  $('#knob').style.left = `${(state.mirror ? 1 - w : w) * 100}%`;
+  const drop = F.comDropCm[i];
+  $('#roDrop').innerHTML = !F.valid[i] ? 'Body <b>–</b>' : drop > 3 ? `Body <b>≈${Math.round(drop)} cm lower</b>` : 'Body <b>upright</b>';
+  const ph = phaseAt(t);
+  if (ph && ph.turn) {
+    const s = frameAt(ph.start);
+    $('#roTurn').innerHTML = `Turn <b>≈${Math.round(Math.abs(F.yaw[i] - F.yaw[s]))}°</b>`;
+  } else {
+    $('#roTurn').innerHTML = 'Turn <b>–</b>';
+  }
+  const bs = F.ballSpeed[i];
+  $('#roBall').innerHTML = !F.ball[i] ? 'Ball <b>not tracked</b>' : ballInAir(i) ? 'Ball <b>in the air</b>'
+    : bs > 1.5 && bs < 15 ? `Ball <b>≈${bs.toFixed(1)} m/s</b>` : `Ball <b>${bs > 0.5 && bs < 15 ? 'rolling' : 'close'}</b>`;
+  $('#time').textContent = `${t.toFixed(2)} s`;
+  $('#tlHead').style.left = pct(t);
+  $('#timeline').setAttribute('aria-valuenow', t.toFixed(2));
+  const sk = LESSON.shots.findIndex((s) => t >= s.start && t < s.end);
+  if (sk !== lastShotTag) {
+    lastShotTag = sk;
+    const s = LESSON.shots[sk];
+    $('#shotTag').innerHTML = s ? `<span>${esc(s.label)}</span>${s.quality === 'low' ? '<span class="low">3D: rough</span>' : ''}` : '';
+  }
+  const id = ph ? ph.id : null;
+  if (id !== lastPhaseId) {
+    lastPhaseId = id;
+    $('#cue').hidden = !ph;
+    if (ph) {
+      $('#cueWhen').textContent = `${ph.start.toFixed(2)}–${ph.end.toFixed(2)} s`;
+      $('#cueName').textContent = ph.name;
+      $('#cueText').textContent = ph.cue;
+    }
+    $$('.tl-phase').forEach((el) => el.classList.toggle('active', el.dataset.id === id));
+    $$('.phase').forEach((el) => el.classList.toggle('live', el.dataset.id === id));
+    $$('.notice-list button').forEach((el) => el.classList.toggle('active', Number(el.dataset.t) >= (ph?.start ?? -1) && Number(el.dataset.t) < (ph?.end ?? -1)));
+    for (const k of ['meter', 'pillStand', 'pillBall', 'roTurn', 'roBall', 'roDrop']) $('#' + k).classList.remove('focus-ring');
+    const focus = { weight: 'meter', stand: 'pillStand', ball: 'pillBall', turn: 'roTurn', balls: 'roBall', drop: 'roDrop' }[ph?.focus];
+    if (focus && state.mode === 'breakdown') $('#' + focus).classList.add('focus-ring');
+  }
+}
+
+function tick() {
+  if (A && skill) {
+    let t = video.currentTime;
+    if (!video.paused) {
+      const end = state.loop ? state.loop.end : skill.range[1];
+      const start = state.loop ? state.loop.start : skill.range[0];
+      if (t >= end - 0.01) { video.currentTime = start; t = start; }
+    }
+    updateHUD(t);
+    render3D(t);
+    challengeTick?.(t);
+  }
+  requestAnimationFrame(tick);
+}
+
+/* ---------------- lesson stages ---------------- */
+const lesson = $('#lesson');
+let challengeTick = null;
+const STAGES = ['watch', 'breakdown', 'practise', 'test'];
+
+function setMode(mode) {
+  state.mode = mode;
+  challengeTick = null;
+  $$('.steps button').forEach((b) => b.setAttribute('aria-pressed', String(b.dataset.mode === mode)));
+  lastPhaseId = '__';
+  ({ watch: renderWatch, breakdown: renderBreakdown, practise: renderPractise, test: renderTest })[mode]();
+}
+$$('.steps button').forEach((b) => b.addEventListener('click', () => setMode(b.dataset.mode)));
+
+function setSkill(id, { keepMode = true } = {}) {
+  skill = LESSON.skills.find((s) => s.id === id) || LESSON.skills[0];
+  phaseList = skill.phases;
+  $$('#skills button').forEach((b) => b.setAttribute('aria-pressed', String(b.dataset.id === skill.id)));
+  setLoop(null);
+  buildTimeline();
+  buildPrints();
+  currentColors = null;
+  lastGhostT = -1;
+  quiz.step = 0; quiz.results = [];
+  try { history.replaceState(null, '', '#' + skill.id); } catch { /* sandboxed */ }
+  setMode(keepMode ? state.mode : 'watch');
+}
+
+function renderWatch() {
+  setOverlays({ prints: true, paths: true, ghost: false, arrow: true, follow: true });
+  const [w0, w1] = skill.watch;
+  lesson.innerHTML = `
+    <div class="card">
+      <div class="eyebrow">Stage 1 of 4 · ${esc(skill.short || skill.name)}</div>
+      <h2>${esc(skill.watchTitle || 'Watch it first')}</h2>
+      <p>${esc(skill.intro)}</p>
+      <ul class="notice-list">
+        ${skill.notice.map((n) => `<li><button type="button" data-t="${n.t}"><span class="ts">${n.t.toFixed(2)} s</span><span><b>${esc(n.title)}.</b> ${esc(n.text)}</span></button></li>`).join('')}
+      </ul>
+      <div class="row">
+        <button type="button" class="btn" id="w1">▶ Full speed</button>
+        <button type="button" class="btn" id="w2">▶ Half speed</button>
+        <button type="button" class="btn cone" id="wNext">Break it down →</button>
+      </div>
+    </div>
+    <div class="card">
+      <div class="eyebrow">Reading the 3D</div>
+      <p>${esc(skill.adds || 'The 3D body beside the video is reconstructed from it. Turn the camera, see which foot carries the weight, and follow the paths of the feet and the ball.')} <b style="color:var(--cone)">Orange</b> is the foot that works the ball, <b style="color:var(--pitch)">blue</b> the standing foot.</p>
+      ${skill.unsure?.length ? `<p class="muted" style="font-size:14px">What this clip can’t tell us:</p><ul class="unsure muted">${skill.unsure.map((u) => `<li>${esc(u)}</li>`).join('')}</ul>` : ''}
+    </div>`;
+  $$('.notice-list button', lesson).forEach((b) => b.addEventListener('click', () => { setLoop(null); seek(Number(b.dataset.t)); }));
+  $('#w1').addEventListener('click', () => playRange(w0, w1, 1));
+  $('#w2').addEventListener('click', () => playRange(w0, w1, 0.5));
+  $('#wNext').addEventListener('click', () => setMode('breakdown'));
+  setView('video');
+  playRange(w0, w1, 1);
+}
+
+const confLabel = { high: 'High confidence', medium: 'Medium confidence', low: 'Low confidence' };
+function renderBreakdown() {
+  lesson.innerHTML = `
+    <div class="card">
+      <div class="eyebrow">Stage 2 of 4 · ${esc(skill.short || skill.name)}</div>
+      <h2>Break it down</h2>
+      <p>${esc(skill.breakdownIntro || `${phaseList.length} moments, in order. Open one to freeze on it; play it to loop it at half speed. The overlays switch to what matters for that moment.`)}</p>
+    </div>
+    <ol class="phases">
+      ${phaseList.map((p, k) => `<li class="phase" data-id="${esc(p.id)}">
+          <button type="button" aria-expanded="false"><span class="num">${k + 1}</span><span><span class="name">${esc(p.name)}</span><br><span class="when">${p.start.toFixed(2)}–${p.end.toFixed(2)} s</span></span><span aria-hidden="true">＋</span></button>
+          <div class="detail" hidden>
+            <div class="cueline">${esc(p.cue)}</div>
+            <dl class="facts">
+              ${p.shows ? `<div><dt>In the 3D</dt><dd>${esc(p.shows)}</dd></div>` : ''}
+              ${p.video ? `<div><dt>In the video</dt><dd>${esc(p.video)}</dd></div>` : ''}
+            </dl>
+            ${p.conf ? `<div><span class="conf ${p.conf}">${confLabel[p.conf]}</span> <span class="muted" style="font-size:13px">${esc(p.why || '')}</span></div>` : ''}
+            <div class="row" style="margin-top:2px">
+              <button type="button" class="btn primary" data-play="${esc(p.id)}">▶ Play at ½×</button>
+              <button type="button" class="btn" data-key="${esc(p.id)}">Freeze on key moment</button>
+            </div>
+          </div>
+        </li>`).join('')}
+    </ol>
+    <div class="row"><button type="button" class="btn cone" id="bNext">Practise it →</button></div>`;
+  const open = (id) => {
+    $$('.phase', lesson).forEach((li) => {
+      const on = li.dataset.id === id;
+      li.classList.toggle('open', on);
+      $('.detail', li).hidden = !on;
+      $('button', li).setAttribute('aria-expanded', String(on));
+    });
+    const p = phaseList.find((x) => x.id === id);
+    if (p.ov) setOverlays(p.ov);
+    setLoop({ start: p.start, end: p.end });
+    seek(p.key);
+    setTimeout(() => setView(p.view || 'video'), 30);
+  };
+  $$('.phase > button', lesson).forEach((b) => b.addEventListener('click', () => open(b.parentElement.dataset.id)));
+  $$('[data-play]', lesson).forEach((b) => b.addEventListener('click', () => { const p = phaseList.find((x) => x.id === b.dataset.play); playRange(p.start, p.end, 0.5); }));
+  $$('[data-key]', lesson).forEach((b) => b.addEventListener('click', () => { const p = phaseList.find((x) => x.id === b.dataset.key); seek(p.key); }));
+  $('#bNext').addEventListener('click', () => setMode('practise'));
+  open(phaseList[0].id);
+}
+
+function renderPractise() {
+  const prog = store.get('drills.' + skill.id, {});
+  setOverlays({ prints: true, paths: true, ghost: false, arrow: false, follow: true });
+  lesson.innerHTML = `
+    <div class="card">
+      <div class="eyebrow">Stage 3 of 4 · on the pitch</div>
+      <h2>Practise it</h2>
+      <p>${skill.drills.length} drills, from footwork only to full speed. Play the model, do the reps, then tick what you managed. Use <b>Mirror</b> to learn it on your other foot. Progress stays in this browser.</p>
+    </div>
+    <ol class="drills">
+      ${skill.drills.map((d, k) => {
+        const p = prog[d.id] || { reps: 0, checks: [] };
+        const done = p.reps >= d.reps && d.checks.every((_, c) => p.checks[c]);
+        return `<li class="drill ${done ? 'done' : ''}" data-id="${esc(d.id)}">
+          <header><span class="num">${k + 1}</span>
+            <div><div class="lvl">${esc(d.lvl)}</div><h3>${esc(d.title)}</h3></div>
+            <button type="button" class="btn" data-model="${esc(d.id)}">▶ Model</button></header>
+          <p style="margin:0">${esc(d.how)}</p>
+          <div class="checks">${d.checks.map((c, ci) => `<label><input type="checkbox" id="chk-${esc(skill.id)}-${esc(d.id)}-${ci}" data-d="${esc(d.id)}" data-c="${ci}" ${p.checks[ci] ? 'checked' : ''}><span>${esc(c)}</span></label>`).join('')}</div>
+          <div class="reps"><button type="button" class="btn icon" data-rep="${esc(d.id)}" aria-label="Add a rep">+1</button>
+            <span>${Math.min(p.reps, d.reps)} / ${d.reps} reps</span>
+            <span class="dots" aria-hidden="true">${Array.from({ length: d.reps }, (_, r) => `<i class="${r < p.reps ? 'on' : ''}"></i>`).join('')}</span>
+            <button type="button" class="btn" data-reset="${esc(d.id)}" style="margin-left:auto">Reset</button></div>
+        </li>`;
+      }).join('')}
+    </ol>
+    <div class="row"><button type="button" class="btn cone" id="pNext">Test yourself →</button></div>`;
+  const save = (id, fn) => { const all = store.get('drills.' + skill.id, {}); all[id] = fn(all[id] || { reps: 0, checks: [] }); store.set('drills.' + skill.id, all); renderPractise(); };
+  $$('[data-model]', lesson).forEach((b) => b.addEventListener('click', () => {
+    const [s, e, r] = skill.drills.find((x) => x.id === b.dataset.model).model;
+    playRange(s, e, r);
+  }));
+  $$('[data-rep]', lesson).forEach((b) => b.addEventListener('click', () => save(b.dataset.rep, (p) => ({ ...p, reps: p.reps + 1 }))));
+  $$('[data-reset]', lesson).forEach((b) => b.addEventListener('click', () => save(b.dataset.reset, () => ({ reps: 0, checks: [] }))));
+  $$('.checks input', lesson).forEach((c) => c.addEventListener('change', () => save(c.dataset.d, (p) => { const checks = [...p.checks]; checks[Number(c.dataset.c)] = c.checked; return { ...p, checks }; })));
+  $('#pNext').addEventListener('click', () => setMode('test'));
+}
+
+/* ---------------- challenges ---------------- */
+const quiz = { step: 0, results: [] };
+function renderTest() {
+  challengeTick = null;
+  setLoop(null);
+  const list = skill.challenges;
+  lesson.innerHTML = `<div class="card quiz" id="quiz"></div>`;
+  const el = $('#quiz');
+  if (quiz.step >= list.length) return summary(el);
+  const c = list[quiz.step];
+  ({ choice: choiceChallenge, tap: tapChallenge, order: orderChallenge })[c.type](el, c, quiz.step + 1, list.length);
+}
+function next(result) { if (result) quiz.results.push(result); quiz.step++; renderTest(); }
+function header(k, n, title, sub) { return `<div class="eyebrow">Stage 4 of 4 · challenge ${k} of ${n}</div><h2>${esc(title)}</h2><p>${sub}</p>`; }
+
+function choiceChallenge(el, c, k, n) {
+  seek(c.t);
+  setOverlays(c.ov || { prints: false, paths: true, ghost: false, arrow: false, follow: true });
+  if (c.view) setTimeout(() => setView(c.view), 30);
+  el.innerHTML = header(k, n, c.title, esc(c.prompt)) + `
+    <div class="options">${c.options.map((o, i) => `<button type="button" data-a="${i}">${esc(o)}</button>`).join('')}</div><div id="fb"></div>`;
+  $$('.options button', el).forEach((b) => b.addEventListener('click', () => {
+    const ok = Number(b.dataset.a) === c.answer;
+    $$('.options button', el).forEach((x) => { x.disabled = true; if (Number(x.dataset.a) === c.answer) x.classList.add('right'); });
+    if (!ok) b.classList.add('wrong');
+    if (c.play) playRange(c.play[0], c.play[1], c.play[2] || 0.5);
+    $('#fb', el).innerHTML = `<div class="feedback ${ok ? 'good' : 'miss'}">${ok ? 'Right.' : 'Not quite.'} ${esc(c.explain)}</div>
+      <div class="row"><button type="button" class="btn primary" id="go">${k < n ? 'Next challenge' : 'See results'}</button></div>`;
+    $('#go', el).addEventListener('click', () => next({ name: c.title, ok }));
+  }));
+}
+
+function tapChallenge(el, c, k, n) {
+  seek(c.from);
+  setOverlays({ prints: false, paths: true, ghost: false, arrow: false, follow: true });
+  el.innerHTML = header(k, n, c.title, `${esc(c.prompt)} Plays at ${c.rate === 0.25 ? 'quarter' : 'half'} speed.`) + `
+    <div class="row"><button type="button" class="btn primary" id="startTap">▶ Start</button><button type="button" class="btn cone" id="tap" disabled>${esc(c.label)}</button></div><div id="fb"></div>`;
+  const tol = c.tolerance ?? 0.12;
+  const finish = (tapped) => {
+    challengeTick = null;
+    $('#tap', el).disabled = true;
+    const err = tapped == null ? null : tapped - c.target;
+    const ok = err != null && Math.abs(err) <= tol;
+    const msg = err == null ? 'No tap that time.' : ok ? `Spot on: ${Math.abs(err * 1000).toFixed(0)} ms ${err < 0 ? 'early' : 'late'}.`
+      : err < 0 ? `${Math.abs(err).toFixed(2)} s early.` : `${err.toFixed(2)} s late.`;
+    seek(c.target);
+    $('#fb', el).innerHTML = `<div class="feedback ${ok ? 'good' : 'miss'}">${msg} ${esc(c.explain)} The video is now frozen at ${c.target.toFixed(2)} s.</div>
+      <div class="row"><button type="button" class="btn" id="again">Try again</button><button type="button" class="btn primary" id="go">${k < n ? 'Next challenge' : 'See results'}</button></div>`;
+    $('#again', el).addEventListener('click', () => tapChallenge(el, c, k, n));
+    $('#go', el).addEventListener('click', () => next({ name: c.title, ok }));
+  };
+  $('#startTap', el).addEventListener('click', () => {
+    seek(c.from, { play: true, rate: c.rate || 0.5 });
+    $('#tap', el).disabled = false;
+    challengeTick = (t) => { if (t > c.target + 0.6) { video.pause(); finish(null); } };
+  });
+  $('#tap', el).addEventListener('click', () => { video.pause(); finish(video.currentTime); });
+}
+
+function orderChallenge(el, c, k, n) {
+  const right = c.ids;
+  const names = Object.fromEntries(phaseList.map((p) => [p.id, p.name]));
+  const shuffled = c.shuffled || [...right].reverse();
+  const picked = [];
+  el.innerHTML = header(k, n, c.title || 'Put the moments in order', esc(c.prompt || 'Tap the moments in the order they happen.')) + `
+    <div class="picked" id="picked" aria-live="polite"></div>
+    <div class="order">${shuffled.map((id) => `<button type="button" data-id="${esc(id)}">${esc(names[id])}</button>`).join('')}</div><div id="fb"></div>`;
+  $$('.order button', el).forEach((b) => b.addEventListener('click', () => {
+    picked.push(b.dataset.id);
+    b.disabled = true;
+    $('#picked', el).innerHTML = picked.map((id, i) => `<span class="${right[i] === id ? '' : 'bad'}">${i + 1}. ${esc(names[id])}</span>`).join('');
+    if (picked.length === right.length) {
+      const wrongCount = picked.filter((id, i) => right[i] !== id).length;
+      const ok = wrongCount === 0;
+      $('#fb', el).innerHTML = `<div class="feedback ${ok ? 'good' : 'miss'}">${ok ? `All ${right.length} in order.` : `${wrongCount} out of place. The order is: ${right.map((id) => esc(names[id])).join(' → ')}.`}</div>
+        <div class="row"><button type="button" class="btn" id="again">Try again</button><button type="button" class="btn primary" id="go">${k < n ? 'Next challenge' : 'See results'}</button></div>`;
+      $('#again', el).addEventListener('click', () => orderChallenge(el, c, k, n));
+      $('#go', el).addEventListener('click', () => next({ name: c.title || 'Order', ok }));
+    }
+  }));
+}
+
+function summary(el) {
+  const got = quiz.results.filter((r) => r.ok).length;
+  const others = LESSON.skills.filter((s) => s.id !== skill.id);
+  el.innerHTML = `<div class="eyebrow">Stage 4 of 4 · results</div><h2>Your answers</h2>
+    <div class="score">${got} / ${quiz.results.length}</div>
+    <ul class="notice-list">${quiz.results.map((r) => `<li class="muted">${r.ok ? '✓' : '✗'} ${esc(r.name)}</li>`).join('')}</ul>
+    <p>${got === quiz.results.length ? 'You know the shape of the move. Take it to the pitch with the last two drills.' : 'Revisit the moments you missed in Break it down, then try again.'}</p>
+    <div class="row"><button type="button" class="btn" id="redo">Try the challenges again</button><button type="button" class="btn primary" id="toB">Back to Break it down</button>
+    ${others.length ? `<button type="button" class="btn cone" id="nextSkill">Next skill: ${esc(others[0].short || others[0].name)} →</button>` : ''}</div>`;
+  $('#redo', el).addEventListener('click', () => { quiz.step = 0; quiz.results = []; renderTest(); });
+  $('#toB', el).addEventListener('click', () => setMode('breakdown'));
+  const idx = LESSON.skills.indexOf(skill);
+  $('#nextSkill', el)?.addEventListener('click', () => setSkill(LESSON.skills[(idx + 1) % LESSON.skills.length].id, { keepMode: false }));
+}
+
+/* ---------------- header and notes ---------------- */
+function renderHeader() {
+  document.title = LESSON.title;
+  $('#title').innerHTML = esc(LESSON.title).replace(esc(LESSON.accent || ''), (m) => (m ? `<span>${m}</span>` : m));
+  $('#subtitle').textContent = LESSON.subtitle;
+  video.setAttribute('aria-label', LESSON.videoLabel || 'Original skill video');
+  const skills = $('#skills');
+  skills.hidden = LESSON.skills.length < 2;
+  skills.innerHTML = LESSON.skills.map((s) => `<button type="button" data-id="${esc(s.id)}" aria-pressed="false"><small>${esc(s.tab)}</small><b>${esc(s.short || s.name)}</b></button>`).join('');
+  $$('#skills button').forEach((b) => b.addEventListener('click', () => setSkill(b.dataset.id)));
+}
+function renderNotes() {
+  const N = LESSON.notes || {};
+  $('#notes').innerHTML = `
+    <div>
+      <div class="eyebrow">About this prototype</div>
+      <h2>Why it’s built this way</h2>
+      <p class="muted">A proof of concept for turning 3D motion reconstructed from an ordinary phone video into coaching. It runs on its own: ${esc(LESSON.sourceNote)}</p>
+      ${LESSON.siblings?.length ? `<p class="muted" style="margin-bottom:0">Other lessons in this set:</p><div class="siblings">${LESSON.siblings.map((s) => `<a href="${esc(safeURL(s.url))}" ${s.self ? 'aria-current="page"' : 'target="_blank" rel="noopener"'}>${esc(s.title)}</a>`).join('')}</div>` : ''}
+    </div>
+    <div>
+      <h3>Three concepts we compared</h3>
+      <div class="compare">
+        <table>
+          <thead><tr><th>Concept</th><th>How it teaches</th><th>Strength</th><th>Weakness alone</th></tr></thead>
+          <tbody>
+            <tr><td><b>Annotated breakdown</b></td><td>Video and 3D side by side, split into phases, with freeze frames, slow motion and cues synced to the move.</td><td>Builds understanding of what each foot does and when.</td><td>Passive. Learners can watch it all without ever trying the move.</td></tr>
+            <tr><td><b>Practice ladder</b></td><td>Short drills from footwork-only to full speed, each with a looping model, a rep target and self-checks.</td><td>Moves learning onto the pitch with progressive load.</td><td>Copying without knowing what to look for repeats mistakes.</td></tr>
+            <tr><td><b>Read and react</b></td><td>Challenges: spot the touch, predict the exit, order the moments.</td><td>Active recall with quick feedback.</td><td>Needs teaching first, or it turns into guessing.</td></tr>
+            <tr class="chosen"><td><b>Built: all three, in order</b></td><td>Watch → Break it down → Practise → Test yourself on one stage, one timeline and one set of overlays${LESSON.skills.length > 1 ? `, with a switch between the ${LESSON.skills.length} skills in this video` : ''}.</td><td>Each stage covers the others’ weakness; the 3D adds what video can’t: weight, contact and any angle.</td><td>More to build and test; the path is linear by default.</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+    <div class="cols">
+      <div>
+        <h3>Design choices</h3>
+        <ul>
+          <li>The original video stays beside the 3D on one clock, so every claim can be checked against what really happened.</li>
+          <li>Feet are named by their job, not left or right: orange works the ball, blue stands. One camera can confuse which leg is which when the legs cross, but the jobs stay clear. Mirror flips the picture for the other foot.</li>
+          <li>Overlays switch per moment (footprints for a plant, the ghost pose for a step, the arrow for a turn) so each moment stays readable.</li>
+          <li>Every measured statement carries a confidence tag, and the lesson says plainly what the clip can’t show.</li>
+          ${(N.choices || []).map((x) => `<li>${esc(x)}</li>`).join('')}
+        </ul>
+      </div>
+      <div>
+        <h3>What to test with users</h3>
+        <ul>
+          <li>After Break it down, can learners name the order of the moments and which foot does the work without looking?</li>
+          <li>Do drill reps improve against a video-only group, as rated by a coach?</li>
+          <li>Which overlays get used, and whether the weight meter and confidence tags are understood or ignored.</li>
+          ${(N.tests || []).map((x) => `<li>${esc(x)}</li>`).join('')}
+        </ul>
+      </div>
+      <div>
+        <h3>Limitations</h3>
+        <ul>
+          <li>One handheld camera. Depth, distances and speeds are estimates, and camera movement isn’t removed: paths are relative to the filming phone.</li>
+          <li>The ball’s position comes from its size on screen, matched to the feet; it can sit a few centimetres off. Which part of the foot touches it can’t be seen reliably.</li>
+          <li>“Weight” is where the body’s mass sits between the feet, not measured force. Defenders aren’t reconstructed.</li>
+          ${(N.limits || []).map((x) => `<li>${esc(x)}</li>`).join('')}
+        </ul>
+      </div>
+    </div>`;
+}
+
+/* ---------------- start ---------------- */
+async function start() {
+  try {
+    [LESSON, A] = await Promise.all([fetchOk('lesson.json').then((r) => r.json()), fetchOk('analysis.json').then((r) => r.json())]);
+  } catch (e) {
+    lesson.innerHTML = `<div class="card"><h2>Lesson data missing</h2><p>${esc(e.message)}. Serve this folder over HTTP so the data files load.</p></div>`;
+    return;
+  }
+  F = A.frames;
+  fps = A.fps;
+  storeKey = 'skilllesson.' + (LESSON.id || 'x');
+  video.src = 'data/' + LESSON.video;
+  renderHeader();
+  renderNotes();
+  const first = (location.hash || '').slice(1);
+  setSkill(LESSON.skills.some((s) => s.id === first) ? first : LESSON.skills[0].id, { keepMode: false });
+  requestAnimationFrame(tick);
+  loadMotion();
+}
+start();
+</script>
