@@ -70,4 +70,7 @@ Not verified yet:
   reconstruction code; its admission logic (`lessons.admit`) is unit-tested.
 - Runtime budgets for 20 s clips at the new profile; measure seconds per frame before raising
   `LESSON_MAX_SECONDS`.
-- iOS build, tests and on-device pass (Frontend branch `codex/lesson-from-video`).
+- iOS: Frontend branch `codex/lesson-from-video` builds for the simulator (Xcode 26.4) and the app
+  launches; the new XCTest cases (`CloudLessonTests.swift`) compile, but the simulator test runner
+  hung before connecting on this machine (iOS 18 and 26), so they have not run. The on-device
+  create → poll → open flow needs the deployed backend.
