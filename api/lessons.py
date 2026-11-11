@@ -28,7 +28,9 @@ class ReportLesson(Metadata):
 
 
 def public_lesson(lesson):
-    return lesson.model_dump(mode="json", by_alias=True, exclude={"artifacts", "source_asset"})
+    # Object keys are the owner's own private paths; the app verifies every download against
+    # these hashes and sizes. Capabilities are minted only by the assets route.
+    return lesson.model_dump(mode="json", by_alias=True)
 
 
 def bundle_paths(lesson):

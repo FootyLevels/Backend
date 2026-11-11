@@ -219,7 +219,7 @@ def test_reading_assets_reports_and_deletion_are_owner_only(setup):
     lessons.lessons[lesson.id] = lesson
     listed = client.get('/api/lessons', headers=auth('alice')).json()['items']
     assert [item['id'] for item in listed] == [lesson.id] and listed[0]['aiGenerated'] is True
-    assert 'artifacts' not in listed[0] and 'sourceAsset' not in listed[0]
+    assert len(listed[0]['artifacts']) == 6 and not any('url' in a for a in listed[0]['artifacts'])
     assert client.get('/api/lessons', headers=auth('bob')).json()['items'] == []
     assert client.get(f'/api/lessons/{lesson.id}', headers=auth('bob')).status_code == 404
     signed = client.post(f'/api/lessons/{lesson.id}/assets', headers=auth('alice')).json()
