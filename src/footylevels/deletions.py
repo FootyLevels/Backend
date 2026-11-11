@@ -97,7 +97,9 @@ class FirestoreDeletions(FirestoreMediaJobs):
         if collection == 'uploads':
             valid = len(tail) == 2 and tail[0] == 'source'
         else:
-            valid = len(tail) == 4 and tail[0] in {'media', 'reconstruction'}
+            # Lesson bundles keep their motion files one folder deeper.
+            valid = (len(tail) == 4 and tail[0] in {'media', 'reconstruction', 'lesson'}) or (
+                len(tail) == 5 and tail[0] == 'lesson' and tail[3] == 'motion')
         if not valid:
             raise RecordConflict('Unsupported asset path')
         return asset
@@ -194,6 +196,14 @@ class FirestoreDeletions(FirestoreMediaJobs):
                 return record
         if self._project_records('reconstructions', project):
             return record
+        for collection in ['lessons', 'lessonReports']:
+            for snapshot in self._project_records(collection, project):
+                for asset in snapshot.to_dict().get('artifacts', []):
+                    storage.verify_absent(AssetRef.model_validate(asset))
+                if not self._remove_metadata(snapshot, budget):
+                    return record
+            if self._project_records(collection, project):
+                return record
         for snapshot in self._project_records('jobs', project):
             if not self._remove_metadata(snapshot, budget):
                 return record
@@ -240,7 +250,11 @@ class FirestoreDeletions(FirestoreMediaJobs):
         for snapshot in comparisons.limit(self.BATCH).stream():
             if not self._remove_metadata(snapshot, budget):
                 return record
-        for collection in ['uploads', 'assetReservations', 'jobs', 'reconstructions']:
+        quota = self.client.collection('lessonQuota').where(filter=FieldFilter('ownerId', '==', record.owner_id))
+        for snapshot in quota.limit(self.BATCH).stream():
+            if not self._remove_metadata(snapshot, budget):
+                return record
+        for collection in ['uploads', 'assetReservations', 'jobs', 'reconstructions', 'lessons', 'lessonReports']:
             if list(self.client.collection(collection).where(filter=FieldFilter('ownerId', '==', record.owner_id)).limit(1).stream()):
                 raise RecordConflict('Unscoped account data requires reconciliation')
         ref = self._ref('users', record.owner_id)

@@ -176,14 +176,20 @@ class FirestoreMediaJobs(FirestoreUploads):
             asset = AssetRef.model_validate(raw["asset"])
             job = self._record(self._ref("jobs", raw["jobId"]).get(transaction=transaction), JobRecord)
             project = self._record(self._ref("projects", raw["projectId"]).get(transaction=transaction), ProjectRecord)
-            directory = "media" if job.kind == "prepareMedia" else "reconstruction"
+            directory = {"prepareMedia": "media", "buildLesson": "lesson"}.get(job.kind, "reconstruction")
             prefix = f"users/{raw['ownerId']}/projects/{project.id}/{directory}/{job.id}/{raw['attempt']}/"
             if (job.owner_id != raw["ownerId"] or job.project_id != project.id
                     or project.owner_id != raw["ownerId"] or not asset.object_key.startswith(prefix)):
                 raise RecordConflict("Output provenance mismatch")
             published = [] if not project.prepared_media else [project.prepared_media.video,
                                                               *[p.asset for p in project.prepared_media.previews]]
-            if job.kind != "prepareMedia":
+            if job.kind == "buildLesson":
+                from .records import LessonRecord
+                lesson_snapshot = self._ref("lessons", job.id).get(transaction=transaction)
+                lesson = self._record(lesson_snapshot, LessonRecord) if lesson_snapshot.exists else None
+                # A lesson its owner deleted keeps no published files; its bytes are reclaimed here.
+                published = lesson.artifacts if lesson and lesson.state == "ready" else []
+            elif job.kind != "prepareMedia":
                 result_snapshot = self._ref("reconstructions", job.id).get(transaction=transaction)
                 published = self._record(result_snapshot, ReconstructionRecord).artifacts if result_snapshot.exists else []
             if asset in published or (job.status == "running" and job.attempt_count == raw["attempt"]

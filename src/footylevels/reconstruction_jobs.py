@@ -16,6 +16,9 @@ class FirestoreReconstructionJobs(FirestoreMediaJobs):
     OUTPUT_LIMIT = 32
     OUTPUT_DIRECTORY = "reconstruction"
     STAGES = {"downloadingInput": 0, "generatingBodies": 1, "packingAssets": 2, "publishingAssets": 3}
+    KINDS = frozenset({"reconstructKeyframes", "reconstructMotion"})
+    FAIL_CODES = frozenset({"model_unavailable", "reconstruction_failed", "job_deadline"})
+    EXHAUSTED_CODE = "reconstruction_failed"
 
     def candidates(self, limit=10, after=None):
         if not 1 <= limit <= 50:
@@ -53,7 +56,7 @@ class FirestoreReconstructionJobs(FirestoreMediaJobs):
             if not snapshot.exists:
                 return None
             job = self._record(snapshot, JobRecord)
-            if job.kind == "prepareMedia" or job.status not in ACTIVE_JOBS:
+            if job.kind not in self.KINDS or job.status not in ACTIVE_JOBS:
                 return None
             project_snapshot = self._ref("projects", job.project_id).get(transaction=transaction)
             project = self._record(project_snapshot, ProjectRecord) if project_snapshot.exists else None
@@ -71,7 +74,7 @@ class FirestoreReconstructionJobs(FirestoreMediaJobs):
             if job.next_attempt_at and job.next_attempt_at > now:
                 return None
             if job.attempt_count >= job.max_attempts:
-                self._finish(transaction, project, job, "reconstruction_failed")
+                self._finish(transaction, project, job, self.EXHAUSTED_CODE)
                 return None
             claimed = job.model_copy(update={"status": "running", "stage": "downloadingInput",
                 "attempt_count": job.attempt_count + 1, "lease_token": secrets.token_hex(24),
@@ -86,7 +89,7 @@ class FirestoreReconstructionJobs(FirestoreMediaJobs):
         project = self._record(self._ref("projects", claim.project_id).get(transaction=transaction), ProjectRecord)
         current = self._record(self._ref("jobs", claim.id).get(transaction=transaction), JobRecord)
         now = utc_now()
-        if (not self._matches(project, current) or current.kind == "prepareMedia" or current.status != "running"
+        if (not self._matches(project, current) or current.kind not in self.KINDS or current.status != "running"
                 or not claim.lease_token or current.lease_token != claim.lease_token
                 or current.attempt_count != claim.attempt_count or not current.lease_expires_at
                 or current.lease_expires_at <= now or not current.attempt_deadline_at
@@ -96,7 +99,7 @@ class FirestoreReconstructionJobs(FirestoreMediaJobs):
 
     def checkpoint(self, claim, stage=None):
         if stage is not None and stage not in self.STAGES:
-            raise ValueError("Unknown reconstruction stage")
+            raise ValueError("Unknown job stage")
         @firestore.transactional
         def heartbeat(transaction):
             _, current = self._current(transaction, claim)
@@ -111,8 +114,8 @@ class FirestoreReconstructionJobs(FirestoreMediaJobs):
         return self._run(heartbeat)
 
     def fail(self, claim, code="model_unavailable", *, retry=True):
-        if code not in {"model_unavailable", "reconstruction_failed", "job_deadline"}:
-            raise ValueError("Expected a safe reconstruction error code")
+        if code not in self.FAIL_CODES:
+            raise ValueError("Expected a safe error code")
         @firestore.transactional
         def fail(transaction):
             project, current = self._current(transaction, claim)

@@ -52,7 +52,8 @@ def public_job(record):
                              exclude={"lease_token", "worker_id", "lease_expires_at"})
 
 
-def create_app(records, verifier, lifespan=None, *, assets=None, uploads=None, deletions=None, circles=None) -> FastAPI:
+def create_app(records, verifier, lifespan=None, *, assets=None, uploads=None, deletions=None, circles=None,
+               lessons=None) -> FastAPI:
     app = FastAPI(title="FootyLevels", version="0.3.0", lifespan=lifespan)
 
     @app.middleware("http")
@@ -118,7 +119,12 @@ def create_app(records, verifier, lifespan=None, *, assets=None, uploads=None, d
 
     @app.get("/api/me")
     def profile(user: Identity = Depends(active_identity)):
-        return records.get_user(user.uid)
+        record = records.get_user(user.uid)
+        body = record.model_dump(mode="json", by_alias=True)
+        body["consents"] = {"lessonAi": {"accepted": record.lesson_ai_consented,
+                                         "version": record.lesson_ai_consent_version,
+                                         "acceptedAt": body.get("lessonAiConsentAt")}}
+        return body
 
     @app.post("/api/projects", status_code=201)
     def create_project(body: CreateProject,
@@ -222,6 +228,10 @@ def create_app(records, verifier, lifespan=None, *, assets=None, uploads=None, d
         from api.circles import circle_router
         app.include_router(circle_router(circles, assets, active_identity))
 
+    if lessons is not None:
+        from api.lessons import lesson_router
+        app.include_router(lesson_router(records, lessons, assets, active_identity, public_job))
+
     return app
 
 
@@ -259,5 +269,9 @@ def app_factory() -> FastAPI:
 
     from footylevels.deletions import FirestoreDeletions
     from footylevels.circles import FirestoreCircles
+    from footylevels.lessons import FirestoreLessons
+    lessons = FirestoreLessons(client, model=os.environ.get("GEMINI_MODEL") or "gemini-4-carbon",
+                               max_seconds=float(os.environ.get("LESSON_MAX_SECONDS", "20")),
+                               daily_limit=int(os.environ.get("LESSON_DAILY_LIMIT", "3")))
     return create_app(FirestoreRecords(client), verifier, lifespan, assets=storage,
-                      deletions=FirestoreDeletions(client), circles=FirestoreCircles(client))
+                      deletions=FirestoreDeletions(client), circles=FirestoreCircles(client), lessons=lessons)

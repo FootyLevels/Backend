@@ -1,5 +1,9 @@
 #!/usr/bin/env python3
-"""Single DGX reconstruction runner; requires an explicit verified FP-39 adapter."""
+"""Single DGX GPU runner: reconstructions (FP-39 adapter) and, when configured, lessons.
+
+Lesson jobs (kind buildLesson) run only with --lesson-adapter and a Gemini key in the private
+runtime configuration; otherwise they stay queued for a runner that can take them.
+"""
 import argparse
 import fcntl
 import json
@@ -14,6 +18,7 @@ import time
 import uuid
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "src"))
+sys.path.insert(0, str(Path(__file__).resolve().parents[2]))  # lesson_pipeline
 from cloud_config import load
 
 
@@ -22,16 +27,23 @@ def main():
     parser.add_argument("environment", choices=["dev", "demo"])
     parser.add_argument("--adapter", type=Path, required=True)
     parser.add_argument("--adapter-arg", action="append", default=[])
+    parser.add_argument("--lesson-adapter", type=Path)
+    parser.add_argument("--lesson-adapter-arg", action="append", default=[])
     parser.add_argument("--once", action="store_true")
     args = parser.parse_args()
     adapter = args.adapter.resolve(strict=True)
     if not adapter.is_file() or adapter.suffix != ".py":
         parser.error("Adapter must be a local Python file")
+    lesson_adapter = args.lesson_adapter.resolve(strict=True) if args.lesson_adapter else None
+    if lesson_adapter and (not lesson_adapter.is_file() or lesson_adapter.suffix != ".py"):
+        parser.error("Lesson adapter must be a local Python file")
     load(args.environment)
     from google.cloud import firestore
     from footylevels.assets import SupabaseAssets, StorageUnavailable
     from footylevels.reconstruction_jobs import FirestoreReconstructionJobs
     from footylevels.reconstruction_worker import run_job
+    from footylevels.lesson_jobs import FirestoreLessonJobs
+    from footylevels.lesson_worker import run_job as run_lesson
     from footylevels.repositories import RecordConflict, RecordNotFound
     root = Path.home() / ".local/share/footylevels/reconstruction-worker" / args.environment
     root.mkdir(parents=True, exist_ok=True, mode=0o700)
@@ -50,8 +62,16 @@ def main():
                                                             project=os.environ["FIREBASE_PROJECT_ID"])
         storage = SupabaseAssets(os.environ["SUPABASE_URL"], os.environ["SUPABASE_SECRET_KEY"])
         jobs = FirestoreReconstructionJobs(client)
+        lesson_jobs = FirestoreLessonJobs(client)
+        model = os.environ.get("GEMINI_MODEL") or "gemini-4-carbon"
+        lessons_enabled = bool(lesson_adapter and os.environ.get("GEMINI_API_KEY"))
+        lesson_cache = root / "lesson-cache"
+        lesson_cache.mkdir(exist_ok=True, mode=0o700)
+        for path in lesson_cache.iterdir():
+            if not path.is_symlink() and path.is_dir() and path.stat().st_mtime < time.time() - 7 * 86400:
+                shutil.rmtree(path)
         for path in root.iterdir():
-            if (re.fullmatch(r"reconstruction-[a-z0-9_]{8}", path.name) and not path.is_symlink()
+            if (re.fullmatch(r"(reconstruction|lesson)-[a-z0-9_]{8}", path.name) and not path.is_symlink()
                     and path.is_dir() and path.stat().st_mtime < time.time() - 86400):
                 shutil.rmtree(path)
         cursor, worker = None, "gpu-" + uuid.uuid4().hex
@@ -64,7 +84,10 @@ def main():
                         if stop.is_set():
                             break
                         try:
-                            claim = jobs.claim(snapshot.id, worker)
+                            lesson = (snapshot.to_dict() or {}).get("kind") == "buildLesson"
+                            if lesson and not lessons_enabled:
+                                continue
+                            claim = (lesson_jobs if lesson else jobs).claim(snapshot.id, worker)
                             if not claim:
                                 continue
                             # Also bound hung cloud calls. On process loss the
@@ -73,10 +96,16 @@ def main():
                             watchdog.daemon = True
                             watchdog.start()
                             try:
-                                outcome = run_job(jobs, storage, claim, [sys.executable, str(adapter), *args.adapter_arg], root, stop=stop)
+                                if lesson:
+                                    outcome = run_lesson(lesson_jobs, storage, claim,
+                                                         [sys.executable, str(lesson_adapter), *args.lesson_adapter_arg],
+                                                         root, model=model, cache_root=lesson_cache, stop=stop)
+                                else:
+                                    outcome = run_job(jobs, storage, claim, [sys.executable, str(adapter), *args.adapter_arg], root, stop=stop)
                             finally:
                                 watchdog.cancel()
-                            print(json.dumps({"service": "reconstruction-worker", "outcome": outcome}), flush=True)
+                            print(json.dumps({"service": "reconstruction-worker", "kind": "buildLesson" if lesson else "reconstruction",
+                                              "outcome": outcome}), flush=True)
                         except (RecordConflict, RecordNotFound):
                             pass
                 except StorageUnavailable:
