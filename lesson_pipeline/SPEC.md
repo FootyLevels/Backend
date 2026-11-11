@@ -31,10 +31,13 @@ and evidence files are optional and are not included in the default model reques
 ## API authoring
 
 `generate [VIDEO]` sends the selected video and a fixed prompt to a configurable Gemini model, defaulting
-through `--model`, then `GEMINI_MODEL`, then `gemini-4-argon`. Credentials come only from
+through `--model`, then `GEMINI_MODEL`, then `gemini-4-carbon`. Credentials come only from
 `GEMINI_API_KEY` or `GOOGLE_API_KEY`. The prompt includes only shared instructions, the lesson
 schema and basic metadata from the video. It includes no finished example, externally detected cuts,
 motion evidence, measurements or draft. Video is sampled at 5 fps for fast skill movements.
+This is `--mode baseline`. `--mode grounded` (see README.md and `grounded.py`) does receive the
+measurements: as fallible hints for phase timing, as placeholders for every number, and as the
+reference for the ball foot and key moments; its output is checked with `validate(strict=True)`.
 
 The generator owns `schemaVersion`, `id`, `folder` and `video`; model output cannot choose an asset
 path. The returned JSON must pass mechanical structure, finite-number, reference and timing checks. Repair

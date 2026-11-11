@@ -301,3 +301,18 @@ runpy.run_path(script,run_name='__main__')
     assert resumed.returncode == 0, resumed.stderr
     assert json.loads((output/'sequence.json').read_text())['validBodyFrames'] == 30
     assert np.isfinite(np.load(output/'raw/000000.npz')['vertices']).all()
+
+
+def test_lesson_profile_takes_whole_clips_from_its_own_staging_name(bridge):
+    instance, body_source = bridge
+    lesson_source = body_source.parents[1]/'lesson-abcdefgh/lesson-input.mp4'
+    lesson_source.parent.mkdir()
+    lesson_source.write_bytes(b'lesson source')
+    lesson = {'profileVersion': module.LESSON_PROFILE, 'startFrame': 0, 'endFrame': 600}
+    response = call(instance, request(lesson_source, **lesson))
+    assert response['status'] == 'ready' and response['profileVersion'] == module.LESSON_PROFILE
+    # Each profile keeps its own limits and staging location.
+    assert call(instance, request(lesson_source, **{**lesson, 'endFrame': 601})) == {'error': 'invalid_request'}
+    assert call(instance, request(body_source, **lesson)) == {'error': 'invalid_request'}
+    assert call(instance, request(lesson_source, endFrame=300, startFrame=0)) == {'error': 'invalid_request'}
+    assert call(instance, request(body_source, startFrame=0, endFrame=600)) == {'error': 'invalid_request'}

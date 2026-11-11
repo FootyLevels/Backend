@@ -52,9 +52,31 @@ class AssetRef(Metadata):
         return self
 
 
+LESSON_AI_CONSENT = "lesson-ai-v1"
+
+
+def _without_unset(payload: dict, *fields: str) -> dict:
+    # Rolling upgrades: older strict readers forbid unknown fields, so optional
+    # new fields are written only once they hold a value.
+    for field in fields:
+        if payload.get(field) is None:
+            payload.pop(field, None)
+    return payload
+
+
 class UserRecord(Record):
     display_name: str = Field(min_length=1, max_length=80)
     account_state: Literal["active", "restricted", "deleting", "deleted"] = "active"
+    # Asked once per account before any video is sent to an AI model for a lesson.
+    lesson_ai_consent_at: AwareDatetime | None = None
+    lesson_ai_consent_version: Literal["lesson-ai-v1"] | None = None
+
+    def document(self):
+        return _without_unset(super().document(), "lessonAiConsentAt", "lessonAiConsentVersion")
+
+    @property
+    def lesson_ai_consented(self) -> bool:
+        return self.lesson_ai_consent_version == LESSON_AI_CONSENT and self.lesson_ai_consent_at is not None
 
 
 class MediaPreview(Metadata):
@@ -104,7 +126,11 @@ class ProjectRecord(Record):
     active_job_id: Id | None = None
     active_upload_id: Id | None = None
     latest_reconstruction_id: Id | None = None
+    latest_lesson_id: Id | None = None
     deleted_at: AwareDatetime | None = None
+
+    def document(self):
+        return _without_unset(super().document(), "latestLessonId")
 
     @model_validator(mode="after")
     def private_source(self):
@@ -118,7 +144,7 @@ class ProjectRecord(Record):
 class JobRecord(Record):
     owner_id: Id
     project_id: Id
-    kind: Literal["reconstructKeyframes", "reconstructMotion", "prepareMedia"]
+    kind: Literal["reconstructKeyframes", "reconstructMotion", "prepareMedia", "buildLesson"]
     input_revision: int = Field(ge=1)
     input_hash: Sha256
     profile_version: str = Field(min_length=1, max_length=80)
@@ -133,12 +159,13 @@ class JobRecord(Record):
     lease_expires_at: AwareDatetime | None = None
     worker_id: Id | None = None
     reconstruction_id: Id | None = None
+    lesson_id: Id | None = None
     finished_at: AwareDatetime | None = None
     heartbeat_at: AwareDatetime | None = None
     attempt_deadline_at: AwareDatetime | None = None
     deadline_at: AwareDatetime | None = None
     next_attempt_at: AwareDatetime | None = None
-    error_code: Literal["invalid_media", "unsupported_media", "source_file_limit", "prepared_file_limit", "processing_limit", "preparation_unavailable", "model_unavailable", "reconstruction_failed", "job_deadline", "input_changed"] | None = None
+    error_code: Literal["invalid_media", "unsupported_media", "source_file_limit", "prepared_file_limit", "processing_limit", "preparation_unavailable", "model_unavailable", "reconstruction_failed", "job_deadline", "input_changed", "lesson_unavailable", "lesson_rejected"] | None = None
 
     def document(self):
         payload = super().document()
@@ -148,7 +175,7 @@ class JobRecord(Record):
             payload.pop("keyframes", None)
         if self.motion_segment is None:
             payload.pop("motionSegment", None)
-        return payload
+        return _without_unset(payload, "lessonId")
 
 
 class KeyframeInput(Metadata):
@@ -218,6 +245,56 @@ class ReconstructionRecord(Record):
         if (self.outcome == "ready") != (self.missing_frame_count == 0):
             raise ValueError("Missing frames must be published as partial")
         return self
+
+
+class LessonSkill(Metadata):
+    id: str = Field(pattern=r"^[a-z0-9][a-z0-9-]{0,40}$")
+    name: str = Field(min_length=1, max_length=120)
+
+
+class LessonAuthoring(Metadata):
+    model: str = Field(min_length=1, max_length=120)
+    mode: Literal["grounded", "baseline"]
+    prompt_sha256: Sha256
+    claims_removed: int = Field(ge=0, le=1000)
+    calls: int = Field(ge=0, le=200)
+
+
+class LessonRecord(Record):
+    """A private, AI-generated lesson built from one prepared project video."""
+    owner_id: Id
+    project_id: Id
+    job_id: Id
+    input_revision: int = Field(ge=1)
+    profile_version: Literal["lesson-3d-v1"] = "lesson-3d-v1"
+    source_asset: AssetRef
+    title: str = Field(min_length=1, max_length=120)
+    skills: tuple[LessonSkill, ...] = Field(min_length=1, max_length=8)
+    authoring: LessonAuthoring
+    engine: Engine
+    artifacts: tuple[AssetRef, ...] = Field(min_length=4, max_length=64)
+    ai_generated: Literal[True] = True
+    state: Literal["ready", "deleted"] = "ready"
+    completed_at: AwareDatetime = Field(default_factory=utc_now)
+
+    @model_validator(mode="after")
+    def private_bundle(self):
+        prefix = f"users/{self.owner_id}/projects/{self.project_id}/lesson/{self.job_id}/"
+        names = [a.object_key.rsplit("/", 1)[-1] for a in self.artifacts]
+        if self.id != self.job_id or any(a.bucket != "private-media" or not a.object_key.startswith(prefix)
+                                         for a in self.artifacts):
+            raise ValueError("Lesson files belong to their own job prefix")
+        if not {"lesson.json", "analysis.json", "mesh.json", "video.mp4"} <= set(names):
+            raise ValueError("A lesson bundle needs lesson, analysis, mesh and video files")
+        return self
+
+
+class LessonReport(Record):
+    owner_id: Id
+    lesson_id: Id
+    project_id: Id
+    reason: Literal["wrong_move", "wrong_timing", "unsafe", "inaccurate", "other"]
+    note: str | None = Field(default=None, max_length=500)
 
 
 class ReferenceRecord(Record):

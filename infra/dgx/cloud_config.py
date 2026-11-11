@@ -28,5 +28,10 @@ def load(environment):
     allowed = ["FIREBASE_PROJECT_ID", "SUPABASE_URL", "SUPABASE_SECRET_KEY"]
     for name in allowed:
         os.environ[name] = config[name]
+    # Lesson authoring (optional until lessons are enabled). The Gemini key is read
+    # only by the worker's parent process; the GPU adapter child never inherits it.
+    for name in ["GEMINI_API_KEY", "GEMINI_MODEL", "LESSON_MAX_SECONDS", "LESSON_DAILY_LIMIT"]:
+        if config.get(name) not in (None, ""):
+            os.environ[name] = str(config[name])
     os.environ["GOOGLE_APPLICATION_CREDENTIALS"] = str(key_path)
     return config

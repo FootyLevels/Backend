@@ -172,7 +172,7 @@ def test_six_independent_calls_use_one_upload_and_are_not_repeated_on_resume(wor
     assert len(sdk.models.requests) == 6
     assert sdk.files.deletes == ['files/test-video']
     for request in sdk.models.requests:
-        assert request['model'] == 'gemini-4-argon'
+        assert request['model'] == 'gemini-4-carbon'
         # Every request starts independently; no prior generated lesson is a turn.
         assert len(request['contents']) == 1
     experiments.run(out, client=sdk)

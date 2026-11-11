@@ -35,6 +35,9 @@ def main():
     for tool in ['ffmpeg', 'ffprobe']:
         subprocess.run([tool, '-version'], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, check=True)
     with socket.socket() as probe:
+        # Match Uvicorn and services.py: a TIME_WAIT connection left by the previous
+        # process is not a live listener and must not fail a restart.
+        probe.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
         probe.bind(('127.0.0.1', int(os.environ.get('PORT', '8013'))))
     print(json.dumps({'preflight': 'passed', 'gpu': torch.cuda.get_device_name(0),
                       'freeGiB': round(free / 1024 ** 3, 2), 'totalGiB': round(total / 1024 ** 3, 2),

@@ -11,6 +11,12 @@ import threading
 import time
 
 PROFILE = 'body-motion-30fps-v1'
+# Whole lesson clips: ball tracking kept and SAM tracking returned for player close-ups.
+LESSON_PROFILE = 'lesson-motion-v1'
+LESSON_MAX_FRAMES = int(os.environ.get('LESSON_MAX_FRAMES', '600'))
+PROFILES = {PROFILE: {'frames': (30, 300), 'bodyOnly': True, 'source': ('reconstruction', 'motion-input.mp4')},
+            LESSON_PROFILE: {'frames': (30, min(LESSON_MAX_FRAMES, 1800)), 'bodyOnly': False,
+                             'source': ('lesson', 'lesson-input.mp4')}}
 ROOT = Path(__file__).resolve().parents[1]
 
 
@@ -25,21 +31,25 @@ class MotionTasks:
     def validate(self, request):
         keys = {'op', 'jobId', 'inputHash', 'profileVersion', 'sourcePath', 'sourceSha256',
                 'sourceBytes', 'startFrame', 'endFrame'}
-        if not isinstance(request, dict) or set(request) != keys or request['op'] != 'motion' or request['profileVersion'] != PROFILE:
+        if (not isinstance(request, dict) or set(request) != keys or request['op'] != 'motion'
+                or request['profileVersion'] not in PROFILES):
             raise ValueError('Motion request schema')
+        profile = PROFILES[request['profileVersion']]
+        shortest, longest = profile['frames']
         for field in ['jobId', 'inputHash', 'sourceSha256']:
             if not isinstance(request[field], str) or not re.fullmatch(r'[a-f0-9]{64}', request[field]):
                 raise ValueError('Motion identity')
         start, end, size = request['startFrame'], request['endFrame'], request['sourceBytes']
         if (type(start) is not int or type(end) is not int or not 0 <= start < end <= 1802
-                or not 30 <= end-start <= 300 or type(size) is not int or not 0 < size <= 52428800):
+                or not shortest <= end-start <= longest or type(size) is not int or not 0 < size <= 52428800):
             raise ValueError('Motion bounds')
         source = Path(request['sourcePath'])
         if not source.is_absolute() or not source.is_relative_to(self.input_root):
             raise ValueError('Motion source location')
         parts = source.relative_to(self.input_root).parts
+        prefix, name = profile['source']
         if (len(parts) != 3 or parts[0] not in {'dev', 'demo'}
-                or not re.fullmatch(r'reconstruction-[a-z0-9_]{8}', parts[1]) or parts[2] != 'motion-input.mp4'
+                or not re.fullmatch(prefix + r'-[a-z0-9_]{8}', parts[1]) or parts[2] != name
                 or any(p.is_symlink() for p in [source, *source.parents]) or not source.is_file()
                 or source.stat().st_size != size):
             raise ValueError('Motion source location')
@@ -122,7 +132,7 @@ class MotionTasks:
         files = self.infer(request, directory, stop)
         if stop.is_set():
             raise RuntimeError('Motion stopped')
-        manifest = {'status': 'ready', 'profileVersion': PROFILE, **self.metadata, 'files': files}
+        manifest = {'status': 'ready', 'profileVersion': request['profileVersion'], **self.metadata, 'files': files}
         temporary = directory/'result.tmp'
         temporary.write_text(json.dumps(manifest, allow_nan=False))
         temporary.replace(directory/'result.json')
@@ -159,12 +169,17 @@ def pipeline(request, directory, stop):
     from .providers.local import LocalProvider
     settings = paths()
     count = request['endFrame']-request['startFrame']
+    profile = PROFILES[request['profileVersion']]
+    lesson = request['profileVersion'] == LESSON_PROFILE
     (directory/'project.json').write_text(json.dumps({'video': {'fps': 30, 'duration': count/30, 'frameCount': count}}))
     output = directory/'motion'
     output.mkdir(exist_ok=True, mode=0o700)
     wrapper = ROOT.parents[1]/'infra/dgx/motion_stage.py'
-    stages = [(settings['segPython'], 'segment_video.py', ['--checkpoint', str(settings['segCheckpoint']), '--body-only'], 700),
-              (settings['bodyPython'], 'reconstruct_motion.py', [], 1800)]
+    segment_args = ['--checkpoint', str(settings['segCheckpoint']), *(['--body-only'] if profile['bodyOnly'] else [])]
+    # Budgets scale with the clip: the body profile keeps its original 10 s limits.
+    scale = max(1.0, count/300)
+    stages = [(settings['segPython'], 'segment_video.py', segment_args, round(700*scale)),
+              (settings['bodyPython'], 'reconstruct_motion.py', [], round(1800*scale))]
     LocalProvider.release()
     try:
         for python, script, extra, seconds in stages:
@@ -195,6 +210,8 @@ def pipeline(request, directory, stop):
         if sequence['frameCount'] != count or sequence['fps'] != 30 or sequence['validBodyFrames'] < 1:
             raise ValueError('Motion does not match canonical segment')
         names = ['sequence.json', sequence['topologyFile'], *[c['file'] for c in sequence['chunks']]]
+        if lesson:
+            names.append('tracking.json')
         # Tracking previews share exact canonical segment indices; the cloud
         # adapter later pins their original source frame/time in the manifest.
         for index in sorted({round(i*(count-1)/5) for i in range(6)}):
