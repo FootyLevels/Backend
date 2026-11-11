@@ -24,7 +24,7 @@ existing silent prepared copy does not restore the original narration.
 
 ```bash
 python -m lesson_pipeline generate VIDEO.mp4 --work ~/lesson-work/<id> --id <lesson-id> \
-  --model gemini-4-argon --attempts 3
+  --model gemini-4-carbon --attempts 3
 ```
 
 Omit `VIDEO.mp4` when the workspace already contains the intended `upload.mp4` or supported `source`

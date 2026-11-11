@@ -1,6 +1,6 @@
 # Lesson pipeline: video → structured learning lesson
 
-The default authoring input is **video + shared instructions + lesson schema**. Gemini identifies
+The default (`--mode baseline`) authoring input is **video + shared instructions + lesson schema**. Gemini identifies
 the moves, breaks them into phases, and writes cues, drills and questions in the fixed
 **Watch → Break it down → Practise → Test yourself** structure. It receives no reference lesson,
 external camera cuts, draft, motion measurements or reconstruction evidence.
@@ -25,12 +25,31 @@ an authenticated cloud lesson endpoint or deploy a change to the Swift app.
 - `ffprobe` on the command line, to read local video metadata.
 - `GEMINI_API_KEY` (or `GOOGLE_API_KEY`) in the generator's environment. Keep the key in local
   secret configuration, never in arguments, prompts or commits. `GEMINI_MODEL` sets the default
-  model when `--model` is omitted; otherwise the default is `gemini-4-argon`.
+  model when `--model` is omitted; otherwise the default is `gemini-4-carbon`.
 
 Authoring does not require a GPU, SSH, reconstructed motion, `analysis.json` or an evidence pack.
 The API uploads the selected video to Google and may incur provider charges. See Google's
 [video input guide](https://ai.google.dev/gemini-api/docs/video-understanding) and
-[Gemini 4 Argon documentation](https://ai.google.dev/gemini-api/docs/models/gemini-4-argon).
+[Gemini models documentation](https://ai.google.dev/gemini-api/docs/models).
+
+## Grounded mode (`--mode grounded`)
+
+`generate --mode grounded` needs the 3D reconstruction and `analysis/` (from `run`, or the cloud
+lesson worker) and chains narrow calls through one provider session, with the measurements as a
+second witness: **screen** (whole clip at 5 fps; rejects clips that are not football or have no
+clear player, before GPU time) → **look** (per move, a player-cropped half-speed clip sampled at
+10 fps ≈ 20 fps of real motion, with measured touches/plants as fallible hints → phases) →
+**teach** (the checked timeline + schema → cues, drills, challenges, numbers only as `{{…}}`
+placeholders) → **verify** (each claim supported / unclear / unsupported; unsupported removed,
+unclear moved to `unsure`) → deterministic checks (ball foot against measured contacts, keys
+snapped to measured events, challenges topped up from the timeline, placeholders resolved,
+`check --measured --strict`). `build --app` then runs the Python mirror of the app loader
+(`app_contract.py`). Accepted responses are cached by video, prompt, model and step, so a retry
+re-bills nothing that already passed. Grounded mode costs about 3 + 2 × moves calls.
+
+Settings may live in `~/.config/footylevels/lesson.env` (mode 600; `GEMINI_API_KEY`,
+`GEMINI_MODEL`, `LESSON_GPU_HOST`), loaded by the CLI and never committed; `run` uses
+`LESSON_GPU_HOST` when `--host` is omitted.
 
 ## Generate and review
 
@@ -59,7 +78,7 @@ procedure, and [`SPEC.md`](SPEC.md) documents the lesson fields.
 
 ```bash
 python -m lesson_pipeline generate clip.mp4 --work ~/lesson-work/elastico \
-  --id elastico --model gemini-4-argon --attempts 3
+  --id elastico --model gemini-4-carbon --attempts 3
 ```
 
 Audit files under `WORK/generation/run-<uuid>/` retain the prompt, replies, mechanical findings and

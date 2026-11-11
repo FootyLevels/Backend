@@ -16,6 +16,7 @@ import json
 import shutil
 from pathlib import Path
 
+from . import app_contract
 from .authoring import load_lesson
 from .measures import PLACEHOLDER, resolve_lesson
 from .validate import SLUG, validate, validate_structure
@@ -93,6 +94,11 @@ def build_app(work: Path, lesson_path: Path, out_root: Path, strict=True) -> Pat
     for f in (analysis_dir / 'motion').iterdir():
         shutil.copy(f, bundle / 'motion' / f.name)
     shutil.copy(_video(work), bundle / 'video.mp4')
+    try:
+        app_contract.check_bundle(bundle)
+    except app_contract.ContractError as error:
+        shutil.rmtree(bundle)
+        raise BuildError(f'the app could not open this bundle: {error}') from None
     return bundle
 
 
