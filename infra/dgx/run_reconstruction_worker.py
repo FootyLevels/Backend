@@ -65,6 +65,11 @@ def main():
         lesson_jobs = FirestoreLessonJobs(client)
         model = os.environ.get("GEMINI_MODEL") or "gemini-4-carbon"
         lessons_enabled = bool(lesson_adapter and os.environ.get("GEMINI_API_KEY"))
+        # Lesson screening, close-ups and bundle checks call ffmpeg/ffprobe by name in this
+        # parent; use the same pinned toolchain the adapter is given, not whatever is on PATH.
+        tools = [arg.split("=", 1)[1] for arg in args.lesson_adapter_arg if arg.startswith("--ffmpeg=")]
+        if lessons_enabled and tools:
+            os.environ["PATH"] = str(Path(tools[0]).parent) + os.pathsep + os.environ.get("PATH", os.defpath)
         lesson_cache = root / "lesson-cache"
         lesson_cache.mkdir(exist_ok=True, mode=0o700)
         for path in lesson_cache.iterdir():
