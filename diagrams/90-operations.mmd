@@ -1,0 +1,16 @@
+flowchart LR
+    accTitle: Operations and recovery
+    accDescr: systemd user services restart each process; the API supervises its workers; durable leases let a restarted worker resume work safely; operators pause intake and switch release links for deploys and rollback.
+    boot["Host boot with lingering"] --> target["footylevels.target"]
+    target --> api["API service, restarts after 15 s"]
+    target --> model["Model runtime, retries after 60 s"]
+    target --> tunnel["ngrok service, restarts after 30 s"]
+    target --> timer["Health timer every minute writes health.json"]
+    api --> children["CPU worker and GPU runner"]
+    children -->|"a child exits"| stopAll["API stops the deployment, systemd restarts it"]
+    model --> preflight["Preflight: pinned weights, one A100, at least 12 GiB free"]
+    children --> leases[("Firestore leases and attempts")]
+    leases --> resume["Expired work reclaimed as a new attempt; stale publish rejected"]
+    ops["Operator deploy"] --> pause["runtimeControls acceptingRequests false"]
+    pause --> link["Repoint current release link, restart, smoke test"]
+    link --> rollback["Rollback: repoint to the previous release"]

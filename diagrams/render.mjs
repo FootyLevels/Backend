@@ -10,7 +10,9 @@ const inputs = (await readdir(root)).filter(name => name.endsWith('.mmd')).sort(
 const temporary = await mkdtemp(path.join(root, '.render-'));
 const chrome = process.env.PUPPETEER_EXECUTABLE_PATH;
 const browserConfig = path.join(temporary, 'puppeteer.json');
-if (chrome) await writeFile(browserConfig, JSON.stringify({ executablePath: chrome, headless: true }));
+// Linux containers running as root need Chrome's sandbox off: set PUPPETEER_NO_SANDBOX=1.
+const sandboxArgs = process.env.PUPPETEER_NO_SANDBOX === '1' ? ['--no-sandbox'] : [];
+if (chrome) await writeFile(browserConfig, JSON.stringify({ executablePath: chrome, headless: true, args: sandboxArgs }));
 const run = args => new Promise((resolve, reject) => {
   const child = spawn(process.execPath, [cli, ...args], { stdio: ['ignore', 'pipe', 'pipe'] });
   let diagnostics = '';

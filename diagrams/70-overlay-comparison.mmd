@@ -1,0 +1,20 @@
+flowchart TB
+    accTitle: Overlay comparison
+    accDescr: The Overlay tab compares two motions, A and B, overlaid or side by side on one clock. Today it uses the legacy shared Skill Lab server in Debug builds plus the bundled example; the cloud API stores comparison records but only exposes reads.
+    tab["Overlay tab: OverlayDifferenceView"] --> pick["Choose A, you, and B, reference: the bundled example or a legacy Skill Lab project"]
+    pick --> build{"Both have 3D motion?"}
+    build -->|"no"| start["Build 3D motion: SkillLabClient.startMotion, Debug builds only"]
+    start --> build
+    build -->|"yes"| cmp["ComparisonModel: A's video is the clock, B follows with an offset"]
+    cmp --> overlayL["Overlay: B moved onto A's centre of mass, A blue, B orange"]
+    cmp --> side["Side by side: two 3D stages"]
+    cmp --> note["No score or ranking"]
+    subgraph cloud ["Cloud API today"]
+        rec[("comparisons records: left reconstruction, right reconstruction or reference, mode, offsetMs")]
+        read["GET /api/comparisons/id, read only"]
+    end
+    read --> rec
+    classDef old fill:#f3f3f3,stroke:#8a8a8a,color:#152b46,stroke-dasharray:4 3;
+    classDef data fill:#e8f6f1,stroke:#377967,color:#152b46;
+    class start old;
+    class rec data;

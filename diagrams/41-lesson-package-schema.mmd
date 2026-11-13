@@ -1,0 +1,105 @@
+classDiagram
+    accTitle: Lesson package schema version 1
+    accDescr: Bundle files and the lesson.json structure the app decodes. analysis.json holds per-frame measurements on the same clock.
+    class LessonBundle {
+        lesson.json
+        analysis.json
+        mesh.json
+        video.mp4
+        motion/sequence.json
+        motion/faces.bin
+        motion/body-NNNNNN.bin.gz
+    }
+    class LessonDocument {
+        int schemaVersion = 1
+        string id
+        string title
+        string accent
+        string subtitle
+        string video
+        string videoLabel
+        string sourceNote
+        Shot[] shots
+        Skill[] skills
+        Notes notes
+    }
+    class Shot {
+        number start
+        number end
+        string label
+        string quality
+    }
+    class Skill {
+        string id
+        string name
+        string short
+        string tab
+        string ballFoot
+        bool ballLeavesGround
+        number[2] range
+        number[2] watch
+        string intro
+        Notice[] notice
+        string[] unsure
+    }
+    class Phase {
+        string id
+        string name
+        number start
+        number end
+        number key
+        string cue
+        string shows
+        string conf
+        string why
+        Overlays ov
+        string focus
+        string view
+    }
+    class Drill {
+        string id
+        string title
+        string lvl
+        int reps
+        string how
+        number[3] model
+        string[3] checks
+    }
+    class Challenge {
+        string type
+        string title
+        string prompt
+        string explain
+    }
+    class Choice {
+        number t
+        string[] options
+        int answer
+    }
+    class Tap {
+        number from
+        number target
+        number tolerance
+    }
+    class Order {
+        string[] ids
+        string[] shuffled
+    }
+    class Analysis {
+        number fps
+        int frameCount
+        number duration
+        per-frame com, comDropCm, weight, feet, planted, yaw, ball, ballSpeed, valid
+        shots
+        events touches and plants
+    }
+    LessonBundle *-- LessonDocument
+    LessonBundle *-- Analysis
+    LessonDocument *-- "1..*" Shot
+    LessonDocument *-- "1..*" Skill
+    Skill *-- "2..*" Phase
+    Skill *-- "4..5" Drill
+    Skill *-- "3..4" Challenge
+    Challenge <|-- Choice
+    Challenge <|-- Tap
+    Challenge <|-- Order

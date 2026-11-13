@@ -1,57 +1,41 @@
 flowchart TB
-    accTitle: FootyLevels Development deployment and trust boundaries
-    accDescr: ngrok exposes only the authenticated loopback API. CPU workers hold cloud access; the private GPU runtime uses a user-only Unix socket. Demo has isolated cloud resources but no active API runtime.
-    subgraph phone ["Client device"]
-        app["SwiftUI app and RealityKit player"]
+    accTitle: FootyLevels deployment
+    accDescr: One DGX runs the API with its child workers, the private model runtime and the ngrok agent under systemd user services. Firebase and Supabase are separate per environment; Gemini is called only by the GPU runner.
+    phone["iPhone app"] -->|"HTTPS"| endpoint["ngrok public endpoint"]
+    subgraph dgx ["DGX host, user services"]
+        tunnel["ngrok agent"]
+        api["API: uvicorn api.cloud on 127.0.0.1:8010"]
+        cpu["CPU worker: run_media_worker.py"]
+        gpuRunner["GPU runner: run_reconstruction_worker.py, reconstructions and lessons"]
+        runtime["Model runtime on 127.0.0.1:8013 with inference.sock"]
+        a100["One A100, serial model work"]
+        local[("Weights, staging folders, replay and lesson caches")]
+        systemd["systemd user target and 1 minute health timer"]
     end
-    subgraph edge ["Public HTTPS"]
-        endpoint["Approved ngrok endpoint"]
+    endpoint --> tunnel --> api
+    api -->|"starts and supervises"| cpu
+    api -->|"starts and supervises"| gpuRunner
+    gpuRunner -->|"credential-free adapters over the Unix socket"| runtime
+    runtime --> a100
+    runtime --> local
+    systemd -.-> api
+    systemd -.-> runtime
+    systemd -.-> tunnel
+    subgraph dev ["Development cloud"]
+        devAuth["Firebase Auth and Firestore: footylevels-dev"]
+        devStore[("Supabase: private-media, reference-assets")]
     end
-    subgraph dgx ["Sheridan DGX: 142.55.34.202, account bajajkun"]
-        subgraph network ["Application-scoped DNS namespaces"]
-            tunnel["ngrok agent"]
-            api["Authenticated API: 127.0.0.1:8010"]
-            cpu["One CPU media and cleanup worker"]
-            gpuWorker["One reconstruction dispatcher"]
-            model["Owned model process: 127.0.0.1:8013"]
-        end
-        bridge["Private inference.sock: directory 0700, socket 0600"]
-        gpu["One selected A100: serial model work"]
-        files[("Private weights, cache and staging on DGX")]
-        supervisor["systemd user services and local health timer"]
+    subgraph demo ["Demo cloud, foundation only"]
+        demoAuth["Firebase Auth and Firestore: footylevels-demo"]
+        demoStore[("Supabase buckets")]
     end
-    subgraph cloud ["Development cloud resources: free plans"]
-        auth["Firebase Authentication"]
-        db[("Firestore: records, jobs and cleanup intents")]
-        storage[("Supabase: private-media and reference-assets")]
-    end
-    subgraph demo ["Demo foundation: configured, runtime pending"]
-        demoFirebase["Separate Firebase Auth and Firestore"]
-        demoStorage["Separate Supabase private buckets"]
-    end
-    app -->|"ID-token API requests"| endpoint
-    endpoint -->|"Agent connection"| tunnel
-    tunnel -->|"Localhost Host rewrite"| api
-    app -->|"Login"| auth
-    app -->|"Scoped file capabilities"| storage
-    api -->|"Verify identity"| auth
-    api -->|"Own and supervise child processes"| cpu
-    api -->|"Own and supervise child processes"| gpuWorker
-    api -->|"Scoped server access"| db
-    api -->|"Verify and sign assets"| storage
-    cpu -->|"Claim and publish prepared media"| db
-    gpuWorker -->|"Claim and publish reconstruction"| db
-    cpu -->|"Read and write private files"| storage
-    gpuWorker -->|"Read and write private files"| storage
-    gpuWorker -->|"Credential-free adapter"| bridge
-    bridge -->|"Private IPC"| model
-    model -->|"Load and execute"| gpu
-    model -->|"Weights and bounded local cache"| files
-    supervisor -.->|"Restart and local readiness"| api
-    supervisor -.->|"Restart and warmup"| model
-    supervisor -.->|"Restart agent"| tunnel
-    classDef data fill:#e8f6f1,stroke:#377967,color:#152b46;
-    classDef control fill:#fff4de,stroke:#a78336,color:#152b46;
-    class db,storage,files data;
-    class supervisor,bridge control;
+    api --> devAuth
+    api --> devStore
+    cpu --> devStore
+    gpuRunner --> devStore
+    gpuRunner -->|"HTTPS"| gemini["Gemini API"]
+    phone --> devAuth
+    phone --> devStore
     style demo fill:#f8fafc,stroke:#a5b4c8,stroke-dasharray:5 5
+    classDef data fill:#e8f6f1,stroke:#377967,color:#152b46;
+    class devStore,demoStore,local data;

@@ -1,46 +1,44 @@
 flowchart TB
-    accTitle: FootyLevels Backend component architecture
-    accDescr: One application codebase separates authenticated routes and cloud repositories from credential-free media decoders and model adapters. The model runtime has one serial executor.
-    client["Authenticated iOS request"] --> routes["api.cloud and api.assets"]
-    routes --> identity["authentication.py: Firebase verifier"]
-    routes --> records["repositories.py: profiles, projects, enqueue and owned reads"]
-    routes --> uploads["uploads.py: source sessions and byte reservations"]
-    jobs["reconstruction_jobs.py: claims, heartbeats and publication"]
-    routes --> deletions["deletions.py: tombstones and durable cleanup"]
-    routes --> assets["assets.py: private Supabase adapter"]
-    records --> db[("Firestore")]
-    uploads --> db
-    jobs --> db
-    deletions --> db
-    subgraph background ["API-owned background processes"]
-        cpu["run_media_worker.py"]
-        media["media_jobs.py and media_worker.py"]
-        maintenance["Bounded retention and deletion reconciliation"]
-        dispatcher["run_reconstruction_worker.py"]
-        publication["reconstruction_worker.py: source verification and publication"]
+    accTitle: Backend components
+    accDescr: One FastAPI codebase. Routers per feature share identity and repositories; background processes share the job and storage layers; model work runs in credential-free children and a separate runtime.
+    req["Authenticated request"] --> apiproc
+    subgraph apiproc ["API process"]
+        direction TB
+        routers["Routers: api/cloud.py, api/assets.py, api/circles.py, api/lessons.py"]
+        authn["authentication.py: Firebase verifier"]
+        domain["Domain repositories: repositories.py, uploads.py, circles.py, lessons.py, deletions.py"]
+        recs["records.py: validated document models"]
+        routers --> authn
+        routers --> domain
+        domain --> recs
     end
-    cpu --> media
-    cpu --> maintenance
-    media --> db
-    maintenance --> deletions
-    dispatcher --> publication
-    publication --> jobs
-    media --> assets
-    publication --> assets
-    assets --> storage[("Supabase private files")]
-    media --> decoder["Credential-free FFprobe and FFmpeg groups"]
-    publication --> adapter["Credential-free reconstruction_adapter.py"]
-    subgraph privateRuntime ["Separate owned model service"]
-        bridge["model_bridge.py and motion_bridge.py: owner-only Unix IPC"]
-        serial["Shared serial executor"]
-        body["Warm SAM 3D Body: selected keyframes"]
-        motion["Sequential tracking and body stages: bounded motion"]
+    subgraph bg ["Background processes started by the API"]
+        direction TB
+        cpuW["CPU worker: media_worker.py and deletion reconciliation"]
+        gpuW["GPU runner: reconstruction_worker.py and lesson_worker.py"]
+        jobsL["Job stores: media_jobs, reconstruction_jobs, lesson_jobs: claims, leases, fenced publish"]
+        lib["lesson_pipeline library"]
+        cpuW --> jobsL
+        gpuW --> jobsL
+        gpuW --> lib
     end
-    adapter --> bridge
-    bridge --> serial
-    serial --> body
-    serial --> motion
+    subgraph isolated ["Credential-free children"]
+        direction LR
+        ff["FFprobe and FFmpeg"]
+        radapter["reconstruction_adapter.py"]
+        ladapter["lesson_adapter.py"]
+    end
+    cpuW --> ff
+    gpuW --> radapter
+    gpuW --> ladapter
+    radapter --> runtime["Model runtime: model_bridge.py and motion_bridge.py"]
+    ladapter --> runtime
+    apiproc --> fs[("Firestore")]
+    bg --> fs
+    apiproc --> sb[("Supabase")]
+    bg --> sb
+    gpuW --> gemini["Gemini API"]
+    classDef isolatedc fill:#fff4de,stroke:#a78336,color:#152b46;
     classDef data fill:#e8f6f1,stroke:#377967,color:#152b46;
-    classDef isolated fill:#fff4de,stroke:#a78336,color:#152b46;
-    class db,storage data;
-    class decoder,adapter,bridge isolated;
+    class ff,radapter,ladapter,runtime isolatedc;
+    class fs,sb data;

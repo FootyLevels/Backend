@@ -1,0 +1,14 @@
+flowchart LR
+    accTitle: Making the bundled lessons offline
+    accDescr: The developer CLI turns a source clip into an app bundle. Reconstruction runs on the GPU host over SSH; authoring runs through the Gemini API; a person reviews before the bundle is added to the app.
+    clip[/"Source clip, up to 60 s"/] --> run["lesson_pipeline run: cuts, upload over SSH to the GPU runtime, whole-clip motion, analysis, evidence, draft"]
+    run --> work[("Work folder: upload.mp4, project/, analysis/, evidence/")]
+    work --> gen["generate --mode grounded or baseline: Gemini authoring"]
+    gen --> lessonj[/"lesson.json and audit files"/]
+    lessonj --> check["check --strict or --measured"]
+    check --> review["Human review against the video, PLAYBOOK.md"]
+    review --> build["build --app or --web"]
+    build --> integ["integrate: copy Lesson-id.bundle into Frontend SampleData/Lessons"]
+    integ --> app["Shipped in the next app build"]
+    classDef data fill:#e8f6f1,stroke:#377967,color:#152b46;
+    class work data;

@@ -1,0 +1,30 @@
+sequenceDiagram
+    accTitle: Sign-in and account connection
+    accDescr: Firebase restores or creates the session, the app bootstraps a FootyLevels profile, and every API call carries an ID token with one refresh on 401.
+    autonumber
+    actor P as Player
+    participant App as iOS app
+    participant FA as Firebase Auth
+    participant API as FootyLevels API
+    participant FS as Firestore
+    App->>FA: Restore saved session from the Keychain
+    alt No session
+        App->>P: Splash, then sign-in sheet
+        P->>App: Email and password, or Google
+        App->>FA: Sign in or create the account
+    end
+    FA-->>App: Signed-in user
+    App->>FA: getIDToken
+    App->>API: POST /api/me/bootstrap with Bearer token
+    API->>FA: Verify signature, audience, expiry, revoked or disabled
+    API->>FS: Create the profile once, UID and name from the token
+    API-->>App: Profile, accountState active
+    App->>App: Show the tabs
+    App->>API: Any protected request
+    alt 401 expired token
+        App->>FA: getIDToken forcing refresh
+        App->>API: Retry once
+        opt Second 401
+            App->>FA: Sign out
+        end
+    end

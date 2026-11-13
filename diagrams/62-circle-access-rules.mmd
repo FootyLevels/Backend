@@ -1,0 +1,17 @@
+flowchart TB
+    accTitle: Circle access and revocation rules
+    accDescr: Every circle request passes the same checks in one transaction. Leaving, removal, deletion or a replaced video hides posts and feedback at once.
+    req["Circle request"] --> a{"Caller active and a current member?"}
+    a -->|"no"| hide["404, same as a missing circle"]
+    a -->|"yes"| b{"Owner profile active and circle not deleted?"}
+    b -->|"no"| hide
+    b -->|"yes"| c{"For a post: author still a member with the pinned generation?"}
+    c -->|"no"| hide
+    c -->|"yes"| d{"Project still ready with the pinned revision and video?"}
+    d -->|"no"| hide
+    d -->|"yes"| e{"Attached motion still matches the pinned record?"}
+    e -->|"no"| hide
+    e -->|"yes"| ok["Serve; video and motion grants live 60 s and are rechecked after signing"]
+    leave["Member leaves or is removed"] -.-> c
+    del["Circle, project or account deleted"] -.-> b
+    replace["Video replaced or 3D result deleted"] -.-> d

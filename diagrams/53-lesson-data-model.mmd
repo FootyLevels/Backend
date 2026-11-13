@@ -1,0 +1,54 @@
+erDiagram
+    accTitle: Lesson records
+    accDescr: Documents and fields added for lessons from your own video.
+    users ||--o{ lessonQuota : "daily counter"
+    projects ||--o{ lessons : retains
+    jobs ||--o| lessons : publishes
+    lessons ||--o{ lessonReports : receives
+    users {
+        string id PK
+        timestamp lessonAiConsentAt "set when the player allows AI lessons"
+        string lessonAiConsentVersion "lesson-ai-v1"
+    }
+    projects {
+        string id PK
+        string latestLessonId FK
+    }
+    jobs {
+        string id PK "hash of uid, buildLesson, Idempotency-Key"
+        string kind "buildLesson"
+        string profileVersion "lesson-3d-v1"
+        string inputHash "hash of profiles, source and model"
+        string stage
+        string errorCode "lesson_rejected, lesson_unavailable"
+        string lessonId FK
+    }
+    lessons {
+        string id PK "equals job id"
+        string ownerId FK
+        string projectId FK
+        string jobId FK
+        int inputRevision
+        map sourceAsset
+        string title
+        array skills "id and name"
+        map authoring "model, mode, promptSha256, claimsRemoved, calls"
+        map engine
+        array artifacts "4 to 64 files"
+        bool aiGenerated "always true"
+        string state "ready or deleted"
+        timestamp completedAt
+    }
+    lessonReports {
+        string id PK "hash of uid, lesson, reason"
+        string ownerId FK
+        string lessonId FK
+        string reason "wrong_move, wrong_timing, unsafe, inaccurate, other"
+        string note "max 500"
+    }
+    lessonQuota {
+        string id PK "uid-YYYYMMDD"
+        string ownerId FK
+        int count "default limit 3"
+        timestamp expiresAt
+    }

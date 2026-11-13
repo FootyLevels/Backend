@@ -1,0 +1,18 @@
+stateDiagram-v2
+    accTitle: App states for Create lesson
+    accDescr: CloudLessonViewModel phases from tapping Create lesson to an opened lesson, including consent, polling and failure messages.
+    [*] --> idle: video ready and no active job
+    idle --> submitting: Create lesson
+    submitting --> needsConsent: no consent, or 403 consent_required
+    needsConsent --> idle: Not now
+    needsConsent --> submitting: Allow
+    submitting --> building: 202 job queued
+    submitting --> failed: 409, 422 too long, 429 daily limit
+    building --> building: poll every 15 s, stage text
+    building --> downloading: job succeeded with lessonId
+    building --> failed: lesson_rejected or job failed
+    idle --> downloading: video already has a lesson
+    downloading --> ready: files verified and bundle loads
+    downloading --> failed: hash, size or format mismatch
+    failed --> submitting: try again
+    ready --> [*]: open in the lesson player

@@ -1,0 +1,25 @@
+flowchart LR
+    accTitle: API map and access checks
+    accDescr: Every route group behind the Firebase identity check, the active-profile check and owner checks. Foreign and missing data both return 404.
+    req["HTTPS request"] --> health["GET /api/health, no auth"]
+    req --> verify["Verify Firebase token: signature, audience, expiry, revoked or disabled"]
+    verify --> boot["POST /api/me/bootstrap"]
+    verify --> active["Require active profile"]
+    verify --> delAcc["DELETE /api/me/data, GET /api/deletions and /api/deletions/id"]
+    active --> me["GET /api/me, PUT /api/me/consents/lesson-ai"]
+    active --> proj["Projects: POST, GET list, GET, PATCH, DELETE /api/projects"]
+    active --> up["Uploads: POST project upload-session, GET, refresh, finalize, DELETE /api/uploads/id"]
+    active --> recon["3D: POST project reconstructions keyframes or motion, GET /api/jobs/id, cancel, GET /api/reconstructions/id"]
+    active --> files["Signed reads: project assets, media-assets, reconstruction assets"]
+    active --> les["Lessons: POST project lessons, GET /api/lessons, GET, assets, DELETE, reports"]
+    active --> circ["Circles: 16 routes for circles, invites, members, posts, comments, video and motion grants"]
+    active --> comp["GET /api/comparisons/id"]
+    proj --> owner["UID always from the token, owner and tombstone checks, Idempotency-Key on creates"]
+    up --> owner
+    recon --> owner
+    files --> owner
+    les --> owner
+    circ --> member["Circle membership and generation checks in a transaction"]
+    comp --> owner
+    owner --> resp["no-store responses; 401 sign in, 403 restricted, 404 hidden, 409 stale, 422 invalid, 429 limit, 503 retry"]
+    member --> resp

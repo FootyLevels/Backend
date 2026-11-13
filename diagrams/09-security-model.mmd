@@ -1,0 +1,36 @@
+flowchart TB
+    accTitle: Security and trust boundaries
+    accDescr: Which component holds which credential, what crosses each boundary, and the checks applied on the way.
+    subgraph device ["iPhone, untrusted"]
+        app["App: holds only a Firebase session and short-lived capabilities; verifies every response and download"]
+    end
+    subgraph public ["Public internet"]
+        ngrok["ngrok"]
+    end
+    subgraph server ["DGX, trusted"]
+        api["API: Firestore service account, Supabase secret; never trusts client IDs"]
+        workers["CPU worker and GPU runner: same scoped cloud credentials; GPU runner also holds the Gemini key"]
+        children["FFmpeg and model adapters: empty environment, no credentials, own process group, time limits"]
+        runtime["Model runtime: no cloud keys; owner-only Unix socket; accepts only its staging file names"]
+    end
+    subgraph cloud ["Managed services"]
+        fb["Firebase Auth: token issuer"]
+        fs[("Firestore: deny-all client rules; server access only")]
+        sb[("Supabase: private buckets, signed upload and read capabilities")]
+        gm["Gemini: receives lesson video only after the user consents"]
+    end
+    app -->|"Bearer ID token"| ngrok --> api
+    api -->|"verify, check revoked"| fb
+    api --> fs
+    api -->|"capabilities: upload 2 h, reads 5 min, circle reads 60 s"| app
+    app -->|"direct bytes with capability"| sb
+    workers --> fs
+    workers --> sb
+    workers --> gm
+    workers -->|"job file without lease token"| children
+    children -->|"hash-checked requests"| runtime
+    classDef trusted fill:#eaf2ff,stroke:#3d679b,color:#152b46;
+    classDef secret fill:#fde8e8,stroke:#a33a3a,color:#152b46;
+    classDef data fill:#e8f6f1,stroke:#377967,color:#152b46;
+    class api,workers secret;
+    class fs,sb data;

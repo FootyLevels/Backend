@@ -1,0 +1,37 @@
+flowchart LR
+    accTitle: Where files are stored
+    accDescr: Firestore holds only metadata with AssetRefs. Supabase private-media holds every user file under the owner's prefix. The DGX keeps weights, staging and caches locally. The app holds bundled lessons and caches.
+    subgraph meta ["Firestore, metadata only"]
+        ref["AssetRef: bucket, objectKey, sha256, byteSize, contentType"]
+        ledgers["uploads, assetReservations, storageUsage: byte budgets"]
+    end
+    subgraph bucket ["Supabase private-media, prefix users/uid/projects/pid/"]
+        src["source/uploadId/video: original upload"]
+        media["media/jobId/attempt/: video.mp4 and 6 previews"]
+        rec["reconstruction/jobId/attempt/: keyframes.json and GLBs, or sequence.json, faces.bin, body chunks, video, previews"]
+        les["lesson/jobId/attempt/: lesson.json, analysis.json, mesh.json, video.mp4, motion/"]
+    end
+    refs[("Supabase reference-assets: curated references")]
+    subgraph dgxlocal ["DGX local disk"]
+        weights["Model weights and pinned code"]
+        staging["Per-job staging folders, removed after 24 h"]
+        caches["Inference replay cache and lesson answer cache, 7 days"]
+    end
+    subgraph phone ["iPhone"]
+        bundled["App bundle: shipped lessons and example clip"]
+        drafts["Upload drafts before transfer"]
+        userLessons["Caches/UserLessons/uid: downloaded lessons"]
+    end
+    ref --> src
+    ref --> media
+    ref --> rec
+    ref --> les
+    ref --> refs
+    ledgers -.-> bucket
+    staging --> media
+    staging --> rec
+    staging --> les
+    les -->|"signed reads, hash checked"| userLessons
+    drafts -->|"TUS upload"| src
+    classDef data fill:#e8f6f1,stroke:#377967,color:#152b46;
+    class src,media,rec,les,refs data;

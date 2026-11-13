@@ -1,0 +1,16 @@
+flowchart TB
+    accTitle: Deletion and retention
+    accDescr: Deleting a video or all account data hides it at once, then the CPU worker removes each file after its grace period, verifies it is gone, releases quota, removes records and keeps a minimal tombstone.
+    proj["Player deletes a video: DELETE /api/projects/id"] --> fence
+    acct["Player deletes account data: DELETE /api/me/data"] --> restrict["Profile unavailable, no new projects"]
+    restrict --> fence["Tombstone and deletion intent: hidden at once, jobs cancelled, no new grants, 202"]
+    fence --> grace["Wait for grace periods: source about 72 h, generated files 24 h, issued reads 5 min"]
+    grace --> worker["CPU worker every 120 s, 10 intents per cycle"]
+    worker --> del["Delete one exact file, then check it is absent"]
+    del -->|"still there or storage down"| worker
+    del -->|"absent"| quota["Release user and global quota once"]
+    quota --> more{"Any recorded file left?"}
+    more -->|"yes"| worker
+    more -->|"no"| records["Remove jobs, reconstructions, lessons, reports, comparisons, circle posts and comments"]
+    records --> done["Intent completed, minimal tombstone kept to block replay"]
+    del -.->|"provenance or accounting mismatch"| recon["Pending: reconciliation_required"]

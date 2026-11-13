@@ -1,0 +1,42 @@
+erDiagram
+    accTitle: Firestore data model overview
+    accDescr: Every Firestore collection and how documents refer to each other. Detailed fields for each area are in the feature data models.
+    users ||--o{ projects : owns
+    users ||--o{ deletions : requests
+    users ||--o{ lessonQuota : "daily lesson counter"
+    users ||--o{ circleMemberships : "one ledger per user"
+    projects ||--o{ uploads : receives
+    projects ||--o{ jobs : schedules
+    jobs ||--o| reconstructions : publishes
+    jobs ||--o| lessons : publishes
+    jobs ||--o{ assetReservations : "budgets output files"
+    projects ||--o{ reconstructions : retains
+    projects ||--o{ lessons : retains
+    lessons ||--o{ lessonReports : receives
+    reconstructions ||--o{ comparisons : "left input"
+    references |o--o{ comparisons : "optional right input"
+    users ||--o{ circles : "owns"
+    circles ||--o{ circleInvites : "current invite"
+    circles ||--o{ circlePosts : contains
+    projects ||--o{ circlePosts : "shared as"
+    reconstructions |o--o{ circlePosts : "optional motion"
+    circlePosts ||--o{ circleComments : receives
+    circles |o--o| circleCleanup : "after deletion"
+    users { string id PK }
+    projects { string id PK }
+    uploads { string id PK }
+    jobs { string id PK }
+    reconstructions { string id PK }
+    lessons { string id PK }
+    lessonReports { string id PK }
+    lessonQuota { string id PK }
+    assetReservations { string id PK }
+    deletions { string id PK }
+    references { string id PK }
+    comparisons { string id PK }
+    circles { string id PK }
+    circleMemberships { string id PK }
+    circleInvites { string id PK }
+    circlePosts { string id PK }
+    circleComments { string id PK }
+    circleCleanup { string id PK }

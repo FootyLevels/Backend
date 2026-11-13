@@ -1,0 +1,23 @@
+stateDiagram-v2
+    accTitle: buildLesson job stages
+    accDescr: Six running stages under one lease. Rejection is final; model, storage and adapter failures retry.
+    [*] --> queued: admitted in one transaction
+    queued --> running: GPU runner with lesson adapter and Gemini key claims it
+    state running {
+        [*] --> downloadingInput
+        downloadingInput --> screeningVideo
+        screeningVideo --> generatingBodies: moves found
+        generatingBodies --> writingLesson: measurements ready
+        writingLesson --> checkingLesson: lesson written
+        checkingLesson --> publishingAssets: bundle passes the app contract
+    }
+    running --> succeeded: lesson published
+    running --> failed: lesson_rejected
+    running --> retrying: lesson_unavailable, model_unavailable, reconstruction_failed
+    retrying --> running: cached model answers reused
+    retrying --> failed: 3 attempts or 24 h
+    queued --> cancelled: project deleted
+    running --> cancelled: project deleted
+    succeeded --> [*]
+    failed --> [*]
+    cancelled --> [*]
