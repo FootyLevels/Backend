@@ -1,7 +1,10 @@
 # FootyLevels architecture diagrams
 
 Updated **13 October 2026** from the application source and the Development
-deployment evidence recorded on 12 October. These views document the current
+deployment evidence recorded on 12 October. Views 12–20, on lessons built from a
+user's own video, were added on **13 November 2026** from the merged source
+(Backend `6bd43cf`, Frontend `340a8de`) and the Development run recorded in
+[docs/lesson-from-video.md](../docs/lesson-from-video.md). These views document the current
 implementation; they do not claim a new deployment or a new end-to-end test.
 
 The application uses the existing **SwiftUI/RealityKit client**, one modular
@@ -30,6 +33,15 @@ for scaling/export and **PNG** for slides, Word documents and quick previews.
 | 09 | Queued/running/retry/terminal job states and publication fences | [Mermaid](09-job-lifecycle.mmd) | [SVG](rendered/09-job-lifecycle.svg) · [PNG](rendered/09-job-lifecycle.png) |
 | 10 | Immediate hiding, capability grace periods and verified deletion | [Mermaid](10-deletion-and-retention.mmd) | [SVG](rendered/10-deletion-and-retention.svg) · [PNG](rendered/10-deletion-and-retention.png) |
 | 11 | User services, process recovery, local health and durable job recovery | [Mermaid](11-recovery-and-operations.mmd) | [SVG](rendered/11-recovery-and-operations.svg) · [PNG](rendered/11-recovery-and-operations.png) |
+| 12 | Lessons from your own video: who talks to whom, including Gemini and the GPU runtime | [Mermaid](12-lesson-system-context.mmd) | [SVG](rendered/12-lesson-system-context.svg) · [PNG](rendered/12-lesson-system-context.png) |
+| 13 | Lesson modules in the app, API, GPU runner, `lesson_pipeline` and runtime | [Mermaid](13-lesson-components.mmd) | [SVG](rendered/13-lesson-components.svg) · [PNG](rendered/13-lesson-components.png) |
+| 14 | Updated Firestore schema: `lessons`, `lessonReports`, `lessonQuota` and new fields | [Mermaid](14-lesson-data-model.mmd) | [SVG](rendered/14-lesson-data-model.svg) · [PNG](rendered/14-lesson-data-model.png) |
+| 15 | End-to-end sequence from Create lesson to an opened lesson | [Mermaid](15-lesson-request-sequence.mmd) | [SVG](rendered/15-lesson-request-sequence.svg) · [PNG](rendered/15-lesson-request-sequence.png) |
+| 16 | Grounded multi-pass authoring: data flow through the six steps | [Mermaid](16-grounded-authoring.mmd) | [SVG](rendered/16-grounded-authoring.svg) · [PNG](rendered/16-grounded-authoring.png) |
+| 17 | `buildLesson` job stages, retries and error codes | [Mermaid](17-lesson-job-lifecycle.mmd) | [SVG](rendered/17-lesson-job-lifecycle.svg) · [PNG](rendered/17-lesson-job-lifecycle.png) |
+| 18 | Lesson package schema (`lesson.json` v1 and bundle files) | [Mermaid](18-lesson-package-schema.mmd) | [SVG](rendered/18-lesson-package-schema.svg) · [PNG](rendered/18-lesson-package-schema.png) |
+| 19 | Credentials, process isolation, storage paths and download checks | [Mermaid](19-lesson-trust-and-storage.mmd) | [SVG](rendered/19-lesson-trust-and-storage.svg) · [PNG](rendered/19-lesson-trust-and-storage.png) |
+| 20 | App states for Create lesson (`CloudLessonViewModel`) | [Mermaid](20-app-lesson-flow.mmd) | [SVG](rendered/20-app-lesson-flow.svg) · [PNG](rendered/20-app-lesson-flow.png) |
 
 ## Current deployment and scope
 
@@ -305,6 +317,111 @@ Sources: [service definitions](../infra/dgx/services.py),
 [durable controls](../infra/dgx/reconstruction_control.py),
 [recovery evidence](../infra/dgx/service-recovery-evidence.json).
 
+## 12 — Lessons from your own video: system context
+
+![Lesson system context](rendered/12-lesson-system-context.svg)
+
+A signed-in learner taps **Create lesson** on a prepared video. The API admits a
+`buildLesson` job; the existing GPU runner claims it, screens the clip with Gemini,
+reconstructs whole-clip motion with ball tracking through the private runtime, writes
+and checks the lesson, and publishes a private bundle. The app downloads the bundle
+directly from Supabase with signed URLs and plays it in the existing lesson player.
+Lessons are labelled AI-generated and never score the player.
+
+Sources: [lesson API](../api/lessons.py), [lesson worker](../src/footylevels/lesson_worker.py),
+[feature doc](../docs/lesson-from-video.md).
+
+## 13 — Lesson components
+
+![Lesson component architecture](rendered/13-lesson-components.svg)
+
+No new service was added. Lesson jobs share the GPU runner and its serial lock; the
+runner routes a claim by `kind`. The worker parent imports `lesson_pipeline` and holds
+the Gemini key; the GPU step runs in a credential-free child. The app reuses
+`PackageLessonView` unchanged: a downloaded lesson is an ordinary `Lesson-<id>.bundle`.
+
+Sources: [runner](../infra/dgx/run_reconstruction_worker.py), [adapter](../infra/dgx/lesson_adapter.py),
+[grounded authoring](../lesson_pipeline/grounded.py), [app contract](../lesson_pipeline/app_contract.py),
+[motion bridge](../runtime/skill_lab/backend/motion_bridge.py).
+
+## 14 — Updated data model for lessons
+
+![Lesson Firestore documents](rendered/14-lesson-data-model.svg)
+
+Same conventions as view 04. New optional fields (`lessonAiConsentAt`,
+`latestLessonId`, `lessonId`) are written only once set, so older strict readers keep
+working during a rolling upgrade. A lesson's id equals its job id; one report is kept
+per lesson and reason; `lessonQuota` holds one counter per user per UTC day. Project
+and account deletion remove lessons, reports and quota counters.
+
+Sources: [records](../src/footylevels/records.py), [lesson repository](../src/footylevels/lessons.py),
+[lesson jobs](../src/footylevels/lesson_jobs.py), [deletions](../src/footylevels/deletions.py).
+
+## 15 — Create-lesson sequence
+
+![Create lesson sequence](rendered/15-lesson-request-sequence.svg)
+
+Consent is asked once per account and checked again inside the enqueue transaction,
+together with ready media, clip length (`LESSON_MAX_SECONDS`, default 20), no active
+job, the daily quota (`LESSON_DAILY_LIMIT`, default 3) and the runtime switch. The
+Development run took about 16 minutes for a 9.3 s clip (GPU about 5, authoring about 9).
+
+Sources: [lesson API](../api/lessons.py), [app client](../../Frontend/FootyLevels-Frontend/Services/CloudLessonClient.swift),
+[view model](../../Frontend/FootyLevels-Frontend/ViewModels/CloudLessonViewModel.swift).
+
+## 16 — Grounded multi-pass authoring
+
+![Grounded authoring data flow](rendered/16-grounded-authoring.svg)
+
+Each Gemini pass has a narrow job and a checker that drives bounded repair. The 3D
+measurements act as a second witness: the ball foot follows measured contacts, keys
+snap to measured events, and every number in the text is a placeholder filled from
+`analysis.json` at build time. Accepted answers are cached per job, so a retried
+attempt does not pay again. The single-call baseline remains as `generate --mode baseline`.
+
+Sources: [passes](../lesson_pipeline/passes.py), [clips](../lesson_pipeline/clips.py),
+[session](../lesson_pipeline/generation.py), [plan](../docs/lesson-pipeline-plan.md).
+
+## 17 — buildLesson job lifecycle
+
+![Lesson job lifecycle](rendered/17-lesson-job-lifecycle.svg)
+
+The job reuses the reconstruction lease rules (view 09): one-hour attempts, three
+attempts, 24-hour total deadline, fenced publication. `lesson_rejected` is final and
+spends no GPU time. Lesson jobs stay queued unless the runner has both the lesson
+adapter and a Gemini key.
+
+Sources: [lesson jobs](../src/footylevels/lesson_jobs.py), [lesson worker](../src/footylevels/lesson_worker.py).
+
+## 18 — Lesson package schema
+
+![Lesson package schema](rendered/18-lesson-package-schema.svg)
+
+The structure the app decodes in `LessonPackage.swift`. `app_contract.py` mirrors its
+checks in Python and runs before publication, so a bundle that would fail on the phone
+is never published. Full field notes are in [SPEC.md](../lesson_pipeline/SPEC.md) and the
+[JSON schema](../lesson_pipeline/schema/lesson.schema.json).
+
+## 19 — Credentials, isolation and storage
+
+![Lesson trust and storage](rendered/19-lesson-trust-and-storage.svg)
+
+Only the worker parent holds cloud credentials and the Gemini key. The adapter child
+gets `job.json` without the lease token and runs with an empty environment; the runtime
+accepts only its own staging file name. Files are budgeted with `reserve_outputs`
+before upload, and the app checks every download against the recorded SHA-256 and size
+before the bundle is moved into its cache.
+
+## 20 — App states for Create lesson
+
+![App lesson states](rendered/20-app-lesson-flow.svg)
+
+`CloudLessonViewModel` polls every 15 s while the job is active and maps each stage to
+a status line. A failed or rejected job shows a plain message and allows another try.
+
+Sources: [view model](../../Frontend/FootyLevels-Frontend/ViewModels/CloudLessonViewModel.swift),
+[lesson store](../../Frontend/FootyLevels-Frontend/Services/UserLessonStore.swift).
+
 ## Pending implementation and acceptance
 
 | Area | Boundary shown by these diagrams |
@@ -314,6 +431,7 @@ Sources: [service definitions](../infra/dgx/services.py),
 | Comparison/history polish | Core result/reference/comparison schemas are present; full comparison write flow, overlay/side-by-side and factual history use cases remain separate tickets |
 | Account lifecycle | Application-data cleanup exists; provider identity deletion/account-settings UI remain separate |
 | FP-55 operations | Service recovery is verified; release CI, rollback rehearsal, export/restore with deletion replay and expanded queue/storage monitoring remain |
+| Lessons from video | Development run verified server-side; app HTTP flow with a real sign-in, live 403/409/429 refusals, 20 s clip budgets and the new iOS tests have not run |
 | Backups and reboot | No application backup/restore exercise or shared-host reboot is claimed; future restores must preserve/apply tombstones before access or dispatch |
 
 ## Edit and regenerate

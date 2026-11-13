@@ -1,0 +1,111 @@
+classDiagram
+    accTitle: Lesson package schema version 1
+    accDescr: The bundle files and the lesson.json structure the app decodes; analysis.json holds per-frame measurements on the same clock.
+    class LessonBundle {
+        lesson.json
+        analysis.json
+        mesh.json
+        video.mp4
+        motion/sequence.json
+        motion/faces.bin
+        motion/body-NNNNNN.bin.gz
+    }
+    class LessonDocument {
+        int schemaVersion = 1
+        string id
+        string folder
+        string title
+        string accent
+        string subtitle
+        string video = video.mp4
+        string videoLabel
+        string sourceNote
+        Shot[] shots
+        Skill[] skills
+        Notes notes
+    }
+    class Shot {
+        number start
+        number end
+        string label
+        string quality
+    }
+    class Skill {
+        string id
+        string name
+        string short
+        string tab
+        string ballFoot
+        bool ballLeavesGround
+        number[2] range
+        number[2] watch
+        string watchTitle
+        string intro
+        string adds
+        string breakdownIntro
+        Notice[] notice
+        string[] unsure
+    }
+    class Phase {
+        string id
+        string name
+        number start
+        number end
+        number key
+        string cue
+        string video
+        string shows
+        string conf
+        string why
+        Overlays ov
+        string focus
+        string view
+        bool turn
+    }
+    class Drill {
+        string id
+        string title
+        string lvl
+        int reps
+        string how
+        number[3] model
+        string[3] checks
+    }
+    class Challenge {
+        string type
+    }
+    class ChoiceChallenge {
+        number t
+        string prompt
+        string[] options
+        int answer
+        string explain
+    }
+    class TapChallenge {
+        number from
+        number target
+        number rate
+        number tolerance
+    }
+    class OrderChallenge {
+        string[] ids
+        string[] shuffled
+    }
+    class Analysis {
+        number fps
+        int frameCount
+        number duration
+        frames: com, comDropCm, weight, left, right, planted, yaw, ball, ballSpeed, valid, legSwap
+        shots
+        events: touches, plants
+    }
+    LessonBundle *-- LessonDocument
+    LessonBundle *-- Analysis
+    LessonDocument *-- "1..*" Shot
+    LessonDocument *-- "1..*" Skill
+    Skill *-- "2..*" Phase
+    Skill *-- "4..5" Drill
+    Skill *-- "3..4" Challenge
+    Challenge <|-- ChoiceChallenge
+    Challenge <|-- TapChallenge
+    Challenge <|-- OrderChallenge
