@@ -1,0 +1,34 @@
+sequenceDiagram
+    accTitle: 3D reconstruction and playback
+    accDescr: The player picks key poses or a 1 to 10 second segment; the GPU runner reconstructs it through a credential-free adapter and the private model runtime; the app downloads and checks the result and plays it in RealityKit.
+    autonumber
+    actor P as Player
+    participant App as iOS app
+    participant API as FootyLevels API
+    participant FS as Firestore
+    participant R as GPU runner
+    participant M as Model runtime
+    participant SB as Supabase
+    P->>App: Choose 1 to 24 key poses with boxes, or a 1 to 10 s segment
+    App->>API: POST /api/projects/id/reconstructions/keyframes or motion with inputRevision
+    API->>FS: Check owner, ready video, bounds, then queue job with a request hash
+    API-->>App: 202, Location /api/jobs/id
+    R->>FS: Claim job, 5 minute lease, heartbeat every 30 s
+    R->>SB: Download prepared video
+    R->>M: Adapter request over inference.sock
+    alt Key poses
+        M->>M: Warm SAM 3D Body per frame
+        M-->>R: keyframes.json and GLB per pose
+    else Motion segment
+        M->>M: SAM 3 tracks the player, SAM 3D Body per frame, 3-frame smoothing, pack chunks
+        M-->>R: sequence.json, faces.bin, body chunks, previews, trimmed video
+    end
+    R->>R: Validate files, timestamps, topology and hashes
+    R->>FS: Reserve output bytes
+    R->>SB: Upload files
+    R->>FS: Fenced publish, reconstruction record, job succeeded or partial
+    App->>API: Poll GET /api/jobs/id every 15 s
+    App->>API: GET /api/reconstructions/id, POST its assets
+    API-->>App: 5 minute signed reads
+    App->>SB: Download and verify every file
+    App->>P: 3D body synced to the video, pose inspector

@@ -1,0 +1,15 @@
+flowchart TB
+    accTitle: Model runtime internals
+    accDescr: One private runtime process with a single serial executor. Key poses use a warm body model; motion runs SAM 3 tracking and SAM 3D Body as subprocess stages in their own Python environments.
+    sock["inference.sock: owner-only Unix socket"] --> bridge["model_bridge.py and motion_bridge.py: validate request schema, hashes, staging path"]
+    bridge --> exec["One serial executor, 180 s inference watchdog"]
+    exec --> kp["Key poses: warm SAM 3D Body on each frame crop"]
+    exec --> mot["Motion profiles"]
+    mot --> seg["segment_video.py: SAM 3 tracks the person, largest at the seed frame, per camera shot"]
+    seg --> body["reconstruct_motion.py: SAM 3D Body per frame, cached raw results, 3-frame smoothing"]
+    body --> pack["pack_sequence: uint16 vertex chunks, gzip, faces.bin, sequence.json"]
+    mot --> profiles["body-motion-30fps-v1: body only, 30 to 300 frames; lesson-motion-v1: with ball tracking and tracking.json, up to 600 frames"]
+    kp --> out[("Replay cache under motion-cache, results listed with SHA-256")]
+    pack --> out
+    classDef data fill:#e8f6f1,stroke:#377967,color:#152b46;
+    class out data;

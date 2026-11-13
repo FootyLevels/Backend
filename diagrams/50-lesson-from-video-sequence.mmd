@@ -1,0 +1,41 @@
+sequenceDiagram
+    accTitle: Create a lesson from your own video
+    accDescr: Consent, idempotent request, GPU runner stages, fenced publication, polling and verified download into the lesson player.
+    autonumber
+    actor P as Player
+    participant App as iOS app
+    participant API as FootyLevels API
+    participant FS as Firestore
+    participant R as GPU runner
+    participant G as Gemini API
+    participant C as Adapter and model runtime
+    participant SB as Supabase
+    P->>App: Tap Create lesson on a ready video
+    App->>API: GET /api/me
+    opt First time on this account
+        App->>P: Consent sheet, the video is sent to Google for AI analysis
+        P->>App: Allow
+        App->>API: PUT /api/me/consents/lesson-ai
+    end
+    App->>API: POST /api/projects/id/lessons with inputRevision and Idempotency-Key
+    API->>FS: One transaction: consent, ready video, max 20 s, no active job, daily limit 3, intake open
+    API-->>App: 202, Location /api/jobs/id
+    R->>FS: Claim buildLesson job
+    R->>SB: Download prepared video
+    R->>G: Screen the whole clip
+    alt Nothing to teach
+        R->>FS: Fail with lesson_rejected, no GPU time spent
+    else Moves found
+        R->>C: Whole-clip 3D motion with ball tracking, then measurements
+        C-->>R: analysis.json, mesh, motion, tracking boxes
+        R->>G: Look at each move close up, Teach, Verify each claim
+        R->>R: Deterministic checks, build bundle, app contract check
+        R->>SB: Upload bundle files after reserving bytes
+        R->>FS: Publish lesson, job succeeded, project latestLessonId
+    end
+    loop Every 15 s while active
+        App->>API: GET /api/jobs/id
+    end
+    App->>API: GET /api/lessons/id, POST /api/lessons/id/assets
+    App->>SB: Download every file, check SHA-256 and size
+    App->>P: Lesson opens, labelled AI-generated, with Report a problem

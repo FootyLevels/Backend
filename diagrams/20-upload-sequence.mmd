@@ -1,0 +1,33 @@
+sequenceDiagram
+    accTitle: Upload and video preparation
+    accDescr: The app trims and compresses a clip, creates a project, uploads directly to Supabase with a resumable capability, finalizes, and the CPU worker prepares the canonical video.
+    autonumber
+    actor P as Player
+    participant App as iOS app
+    participant API as FootyLevels API
+    participant FS as Firestore
+    participant SB as Supabase
+    participant CPU as CPU worker
+    P->>App: Record up to 60 s or pick from Photos
+    App->>App: Trim 1 to 60 s, export 720p MP4 without audio, max 50 MB, save draft
+    App->>API: POST /api/projects with Idempotency-Key
+    API->>FS: Create project, state uploading
+    App->>API: POST /api/projects/id/upload-session with size, SHA-256, expectedRevision
+    API->>FS: Reserve 50 MiB against user and global budgets
+    API-->>App: Signed TUS capability, valid 2 h
+    App->>SB: TUS upload in 6 MiB chunks, resumable
+    App->>API: POST /api/uploads/id/finalize
+    API->>SB: Check exact size and SHA-256
+    API->>FS: Commit source, bump inputRevision, state preparing, queue prepareMedia job
+    API-->>App: 202
+    CPU->>FS: Poll every 120 s and claim the job
+    CPU->>SB: Download source
+    CPU->>CPU: FFprobe and FFmpeg: H.264, 30 fps, max 1280x720, no audio, 6 JPEG previews
+    CPU->>SB: Upload video.mp4 and previews
+    CPU->>FS: Fenced publish, preparedMedia set, state ready
+    loop Every 12 to 15 s
+        App->>API: GET /api/projects/id
+    end
+    App->>API: POST /api/projects/id/media-assets
+    API-->>App: 5 minute signed reads
+    App->>SB: Download prepared video for playback

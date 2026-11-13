@@ -1,0 +1,29 @@
+sequenceDiagram
+    accTitle: Circles - join, share and feedback
+    accDescr: The owner creates a circle and an invite code; a friend joins; a player shares a prepared video with optional 3D motion; members watch with 60 second grants and comment at video moments.
+    autonumber
+    actor O as Circle owner
+    actor M as Member
+    participant App as iOS app
+    participant API as FootyLevels API
+    participant FS as Firestore
+    participant SB as Supabase
+    O->>App: Create circle
+    App->>API: POST /api/circles
+    O->>App: Invite
+    App->>API: POST /api/circles/id/invite
+    API->>FS: Store SHA-256 of a new 43-character code, 7 day expiry
+    API-->>App: Code to send privately
+    M->>App: Enter code
+    App->>API: POST /api/circles/join
+    API->>FS: Add member with a new generation, max 20 members
+    M->>App: Share a ready video, skill, note, optional 3D motion and earlier attempt
+    App->>API: POST /api/circles/id/posts with Idempotency-Key
+    API->>FS: Recheck membership, pin video, revision and motion
+    O->>App: Open the post
+    App->>API: POST /api/circles/id/posts/pid/assets and motion-assets
+    API-->>App: Signed reads valid 60 s, rechecked after signing
+    App->>SB: Download video and motion
+    O->>App: Comment at 2.4 s
+    App->>API: POST /api/circles/id/posts/pid/comments with text and timestamp
+    M->>App: Read feedback, jump to the moment, record a new attempt

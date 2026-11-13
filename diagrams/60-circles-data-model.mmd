@@ -1,0 +1,60 @@
+erDiagram
+    accTitle: Community circle records
+    accDescr: Circles, membership ledgers, hashed invites, shared posts, comments and cleanup markers.
+    users ||--o| circleMemberships : "ledger"
+    users ||--o{ circles : owns
+    circles ||--o| circleInvites : "current code"
+    circles ||--o{ circlePosts : contains
+    circlePosts ||--o{ circleComments : receives
+    circles |o--o| circleCleanup : "after deletion"
+    projects ||--o{ circlePosts : "shared as"
+    circles {
+        string id PK
+        string ownerId FK
+        string name "max 80"
+        string description "max 240"
+        string state "active or deleted"
+        array memberIds "max 20"
+        array members "uid, displayName, joinedAt, generation"
+        string inviteHash "SHA-256 of the code"
+        int postCount "max 200"
+    }
+    circleMemberships {
+        string id PK "uid"
+        array circleIds "max 20 circles per player"
+    }
+    circleInvites {
+        string id PK "SHA-256 of 43-character code"
+        string circleId FK
+        timestamp expiresAt "7 days"
+    }
+    circlePosts {
+        string id PK
+        string circleId FK
+        string authorId FK
+        string authorName
+        string projectId FK
+        string projectTitle
+        string skill "max 60"
+        string note "max 500"
+        string previousPostId FK "earlier attempt by the same author"
+        map video "pinned prepared video metadata"
+        map motion "optional pinned reconstruction and job snapshot"
+        int inputRevision
+        string memberGeneration
+        string state "active or removed"
+        int commentCount "max 200"
+    }
+    circleComments {
+        string id PK
+        string postId FK
+        string authorId FK
+        string authorName
+        string text "max 500"
+        float timestamp "seconds into the video, optional"
+        string state "active or removed"
+    }
+    circleCleanup {
+        string id PK "circle id"
+        string ownerId FK
+    }

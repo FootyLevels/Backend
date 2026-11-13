@@ -1,21 +1,25 @@
 flowchart LR
     accTitle: FootyLevels system context
-    accDescr: A player uses the iOS app, Firebase login, the DGX application API and private Supabase assets. Firestore supplies durable metadata and jobs.
-    player["Player"] --> app["iOS app: SwiftUI and RealityKit"]
-    app -->|"Sign in and refresh identity"| auth["Firebase Authentication"]
-    app -->|"HTTPS and Firebase ID token"| gateway["ngrok public HTTPS endpoint"]
-    gateway -->|"Forward to loopback 8010"| backend["FootyLevels API and owned workers on DGX"]
-    backend -->|"Verify identity and account state"| auth
-    backend -->|"Read and transact records and durable jobs"| firestore[("Firestore metadata")]
-    backend -->|"Generate and verify 3D assets"| model["Private model service on DGX"]
-    backend -->|"Verify files and issue temporary access"| storage[("Supabase private object storage")]
-    app -->|"Direct signed TUS upload and temporary reads"| storage
-    app -.->|"Clearly labelled Debug example"| example["Bundled local 3D example"]
-    classDef client fill:#eaf2ff,stroke:#3d679b,color:#152b46;
+    accDescr: Players use the iOS app. The app signs in with Firebase, talks to the FootyLevels API through ngrok for records and jobs, and moves video bytes directly to and from Supabase. The DGX runs the API, workers and the 3D model runtime; Gemini writes lessons.
+    player(["Player"]) --> app
+    coachfriend(["Circle members: friends, teammates, coach"]) --> app
+    subgraph phone ["iPhone"]
+        app["FootyLevels iOS app: Learn, Overlay, Community, Videos"]
+    end
+    app -->|"sign in, ID tokens"| auth["Firebase Authentication"]
+    app -->|"HTTPS JSON with Bearer token"| ngrok["ngrok public endpoint"]
+    ngrok --> api["FootyLevels API on the DGX"]
+    app <-->|"resumable upload and 5 minute signed reads"| sb[("Supabase private storage")]
+    api -->|"verify tokens"| auth
+    api <--> fs[("Firestore: records and job queue")]
+    api -->|"mint upload and read capabilities"| sb
+    api --> workers["DGX workers: media preparation, 3D reconstruction, lesson builder, deletion cleanup"]
+    workers <--> fs
+    workers <--> sb
+    workers --> gpu["Model runtime: SAM 3 tracking and SAM 3D Body on one A100"]
+    workers -->|"lesson authoring"| gemini["Google Gemini API"]
+    bundled[["Bundled lessons and example clip inside the app"]] -.-> app
     classDef data fill:#e8f6f1,stroke:#377967,color:#152b46;
-    classDef external fill:#f1edff,stroke:#756394,color:#152b46;
-    classDef local fill:#fff4de,stroke:#a78336,color:#152b46;
-    class player,app client;
-    class firestore,storage data;
-    class auth,gateway external;
-    class example local;
+    classDef external fill:#fff4de,stroke:#a78336,color:#152b46;
+    class fs,sb data;
+    class auth,ngrok,gemini external;

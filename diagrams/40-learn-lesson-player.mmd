@@ -1,0 +1,19 @@
+flowchart TB
+    accTitle: Learn tab and lesson player
+    accDescr: The Learn tab lists bundled lessons and lessons built from the user's videos. The lesson player plays the video as the clock with the 3D body and walks through four stages; drill progress stays on the phone.
+    learn["Learn tab: LessonLibraryView"] --> hero["Practise next card"]
+    learn --> mine["From your videos: UserLessonsSection"]
+    learn --> shipped["Lessons: every Lesson-*.bundle in the app, plus the Over Fake lesson"]
+    mine --> open["PackageLessonView"]
+    shipped --> open
+    hero --> open
+    open --> load["LessonPackage.load: lesson.json, analysis.json, mesh.json, checks every index"]
+    load --> model["PackageLessonModel: video is the clock, 3D body, overlays, mirror, camera angles"]
+    model --> s1["1 Watch: full-speed clip and moments to notice"]
+    model --> s2["2 Break it down: phases with cue, key frame, confidence, readings"]
+    model --> s3["3 Practise: 4 to 5 drills with model clip and self-checks"]
+    model --> s4["4 Test yourself: choice, tap-the-moment and put-in-order challenges"]
+    s3 --> progress[("DrillProgressStore in UserDefaults: reps and checks")]
+    progress --> profile["Profile card stats"]
+    classDef data fill:#e8f6f1,stroke:#377967,color:#152b46;
+    class progress data;

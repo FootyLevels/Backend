@@ -1,0 +1,18 @@
+stateDiagram-v2
+    accTitle: Account states
+    accDescr: The app's sign-in state and the server profile state. Account data deletion moves the profile to deleting and then deleted, and blocks reactivation.
+    state "App session" as client {
+        [*] --> loading
+        loading --> signedIn: Firebase restores a session
+        loading --> signedOut: no session
+        signedOut --> signedIn: email or Google sign-in
+        signedIn --> signedOut: sign out, revoked token, second 401
+    }
+    state "Server profile" as server {
+        [*] --> active: POST /api/me/bootstrap
+        active --> restricted: operator restriction
+        active --> deleting: DELETE /api/me/data
+        restricted --> deleting: DELETE /api/me/data
+        deleting --> deleted: every owned file verified absent and records removed
+        deleted --> [*]: minimal tombstone blocks bootstrap
+    }

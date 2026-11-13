@@ -1,0 +1,52 @@
+flowchart TB
+    accTitle: iOS app architecture
+    accDescr: SwiftUI app with four tabs. Each tab owns observable view models; view models call service clients; clients share the authenticated API client, the TUS upload client and the verified private download client. Bundled lessons and caches live on the device.
+    launch["FootyLevels_FrontendApp"] --> gate["CheckUser: loading, signed in, signed out"]
+    gate -->|"signed out"| login["Sign-in screens: email or Google"]
+    gate -->|"signed in"| tabs["MainTabView"]
+    tabs --> learn["Learn: LessonLibraryView"]
+    tabs --> overlay["Overlay: OverlayDifferenceView"]
+    tabs --> community["Community: CommunityView"]
+    tabs --> videos["Videos: ProjectsListView"]
+    learn --> lessonVM["PackageLessonModel and UserLessonsModel"]
+    overlay --> compVM["OverlayDifferenceViewModel and ComparisonModel"]
+    community --> commVM["CommunityViewModel, CircleDetail, CircleShare, CirclePost"]
+    videos --> vidVM["CloudUploadsViewModel, CloudProjectViewModel, CloudLessonViewModel, MotionPlayerViewModel"]
+    subgraph services ["Services"]
+        apiClient["AuthenticatedAPIClient: Bearer token, one 401 refresh, no redirects"]
+        uploadC["CloudUploadCoordinator and PrivateTUSClient"]
+        reconC["CloudReconstructionClient"]
+        commC["CommunityClient"]
+        lessonC["CloudLessonClient"]
+        assets["PrivatePlaybackAssets: verified downloads"]
+        legacy["SkillLabClient: legacy shared server, Debug only"]
+        creds["FirebaseAPICredentials and AuthManager"]
+    end
+    vidVM --> uploadC
+    vidVM --> reconC
+    vidVM --> lessonC
+    commVM --> commC
+    lessonVM --> lessonC
+    compVM --> legacy
+    uploadC --> apiClient
+    reconC --> apiClient
+    commC --> apiClient
+    lessonC --> apiClient
+    apiClient --> creds
+    reconC --> assets
+    lessonC --> assets
+    commC --> assets
+    subgraph device ["On the device"]
+        bundle[("App bundle: Lesson-*.bundle and the example clip")]
+        drafts[("Application Support: upload drafts, resume URL in Keychain")]
+        caches[("Caches: downloaded user lessons")]
+        prefs[("UserDefaults: drill progress")]
+    end
+    lessonVM --> bundle
+    lessonVM --> caches
+    lessonVM --> prefs
+    uploadC --> drafts
+    classDef data fill:#e8f6f1,stroke:#377967,color:#152b46;
+    classDef old fill:#f3f3f3,stroke:#8a8a8a,color:#152b46,stroke-dasharray:4 3;
+    class bundle,drafts,caches,prefs data;
+    class legacy old;

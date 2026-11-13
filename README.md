@@ -12,9 +12,10 @@ player's body, built on the Momentum Human Rig (MHR).
 
 ## Application architecture
 
-The current application architecture is documented in [diagrams/README.md](diagrams/README.md),
-with editable Mermaid diagrams and SVG/PNG previews covering deployment, Backend
-components, Firestore data, APIs, assets, processing, deletion and recovery.
+The current application architecture is documented feature by feature in
+[docs/architecture](docs/architecture/README.md), including a full
+[data model and schema reference](docs/architecture/02-data-model.md). Editable Mermaid
+sources with SVG/PNG previews are in [diagrams/README.md](diagrams/README.md).
 The Development API runs on DGX loopback 8010 behind ngrok; the private model runs
 on 8013. Firebase supplies identity/records and Supabase stores private files.
 The diagram index distinguishes implemented components from pending acceptance.
@@ -41,7 +42,7 @@ video → SAM 3D Body (per frame) → BodySequence → store / visualize
 SAM 3D Body is a **single-image** model, so this original local pipeline handles
 video with one forward pass per frame, without temporal smoothing or tracking.
 The integrated body-motion profile additionally reuses SAM tracking and bounded
-motion encoding, as shown in the [reconstruction workflow](diagrams/README.md#08--reconstruction-and-playback).
+motion encoding, as shown in the [reconstruction workflow](docs/architecture/05-3d-motion.md).
 
 ## Setup
 

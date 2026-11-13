@@ -1,0 +1,17 @@
+stateDiagram-v2
+    accTitle: Video project states
+    accDescr: A project moves from uploading to preparing to ready, or to rejected when the media cannot be used. Deletion hides it at once and cleans up later.
+    [*] --> draft: clip saved on the phone
+    draft --> uploading: project created, TUS transfer
+    uploading --> uploading: pause in background, resume with a fresh capability
+    uploading --> preparing: finalize verified size and hash
+    preparing --> ready: prepared video and previews published
+    preparing --> rejected: invalid_media, unsupported_media, file or processing limits
+    preparing --> preparing: preparation_unavailable, retried
+    ready --> preparing: a new source replaces the video
+    uploading --> deleting: owner deletes
+    preparing --> deleting: owner deletes
+    ready --> deleting: owner deletes
+    rejected --> deleting: owner deletes
+    deleting --> deleted: files verified absent
+    deleted --> [*]

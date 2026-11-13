@@ -1,0 +1,99 @@
+erDiagram
+    accTitle: Core records - accounts, videos and 3D
+    accDescr: Fields of the user, project, upload, job, reconstruction, reservation, usage and deletion documents.
+    users ||--o{ projects : owns
+    projects ||--o{ uploads : receives
+    projects ||--o{ jobs : schedules
+    jobs ||--o| reconstructions : publishes
+    jobs ||--o{ assetReservations : budgets
+    users ||--o{ deletions : requests
+    users ||--|| storageUsage : "per-user ledger"
+    users {
+        string id PK "Firebase UID"
+        string displayName
+        string accountState "active, restricted, deleting, deleted"
+        timestamp lessonAiConsentAt "optional"
+        string lessonAiConsentVersion "optional, lesson-ai-v1"
+    }
+    projects {
+        string id PK
+        string ownerId FK
+        string title
+        string source "capture or gallery"
+        string label "optional"
+        string state "uploading, preparing, ready, rejected, deleting, deleted"
+        int inputRevision "bumps on every new source"
+        map video "AssetRef of the verified upload"
+        map preparedMedia "30 fps, max 720p video and 6 previews"
+        string mediaError "optional reason when rejected"
+        string activeJobId FK
+        string activeUploadId FK
+        string latestReconstructionId FK
+        string latestLessonId FK
+    }
+    uploads {
+        string id PK
+        string ownerId FK
+        string projectId FK
+        int expectedRevision
+        map asset "expected size, SHA-256, type"
+        string status "uploading, committed, cancelled"
+        int reservedBytes "max 50 MiB"
+        timestamp expiresAt
+        timestamp cleanupAfter
+    }
+    jobs {
+        string id PK "hash of the request"
+        string ownerId FK
+        string projectId FK
+        string kind "prepareMedia, reconstructKeyframes, reconstructMotion, buildLesson"
+        string status "queued, running, retrying, succeeded, partial, failed, cancelled"
+        string stage
+        int inputRevision
+        string inputHash
+        string profileVersion
+        map sourceAsset
+        array keyframes "1 to 24 frames with boxes"
+        map motionSegment "30 to 300 frames"
+        int attemptCount "max 3"
+        string leaseToken "server only"
+        timestamp leaseExpiresAt "server only"
+        timestamp deadlineAt "24 h"
+        string errorCode
+        string reconstructionId FK
+        string lessonId FK
+    }
+    reconstructions {
+        string id PK "equals job id"
+        string ownerId FK
+        string projectId FK
+        string jobId FK
+        string mode "keyframes or motion"
+        string outcome "ready or partial"
+        map engine "model, commit, checkpoint and config hashes"
+        map contract "topology, metres, Y up, encoding"
+        array artifacts "max 32 AssetRefs"
+        int requestedFrameCount
+        int reconstructedFrameCount
+        int missingFrameCount
+    }
+    assetReservations {
+        string id PK "hash of object key"
+        string jobId FK
+        string ownerId FK
+        map asset
+        int bytes
+    }
+    storageUsage {
+        string id PK "global or hashed UID"
+        int bytes "200 MiB per user, 800 MiB global"
+    }
+    deletions {
+        string id PK
+        string ownerId FK
+        string scope "project or account"
+        string projectId FK
+        string state "pending or completed"
+        timestamp notBefore
+        string lastError "cleanup_unavailable or reconciliation_required"
+    }

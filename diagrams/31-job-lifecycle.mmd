@@ -1,0 +1,19 @@
+stateDiagram-v2
+    accTitle: Background job lifecycle
+    accDescr: All job kinds share this lifecycle. A transactional lease fences each attempt; transient failures retry within three attempts and a 24 hour deadline; deletion or cancellation stops late publication.
+    [*] --> queued: request admitted or upload finalized
+    queued --> running: worker claims with a new lease
+    running --> running: heartbeat, or expired lease reclaimed as a new attempt
+    running --> succeeded: outputs verified and fenced publish
+    running --> partial: 3D usable with declared missing frames
+    running --> retrying: transient failure
+    retrying --> running: next attempt
+    running --> failed: permanent error or attempts exhausted
+    retrying --> failed: 3 attempts or 24 h deadline
+    queued --> cancelled: owner cancels or deletes the project
+    running --> cancelled: owner cancels or deletes the project
+    retrying --> cancelled: owner cancels or deletes the project
+    succeeded --> [*]
+    partial --> [*]
+    failed --> [*]
+    cancelled --> [*]
